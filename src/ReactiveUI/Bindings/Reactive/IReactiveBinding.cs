@@ -1,7 +1,9 @@
-﻿// Copyright (c) 2025 .NET Foundation and Contributors. All rights reserved.
+// Copyright (c) 2009-2026 .NET Foundation and Contributors. All rights reserved.
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
+
+using System.Linq.Expressions;
 
 namespace ReactiveUI;
 
@@ -13,6 +15,24 @@ namespace ReactiveUI;
 /// </summary>
 /// <typeparam name="TView">The view type.</typeparam>
 /// <typeparam name="TValue">The value type.</typeparam>
+/// <remarks>
+/// <para>
+/// <see cref="IReactiveBinding{TView, TValue}"/> instances are returned from helpers like <c>Bind</c>,
+/// <c>OneWayBind</c>, and <c>BindCommand</c>. Holding onto the binding allows you to inspect the original
+/// property expressions, observe the <see cref="Changed"/> stream, or dispose the binding manually when a
+/// different lifecycle than <c>WhenActivated</c> is required.
+/// </para>
+/// </remarks>
+/// <example>
+/// <code language="csharp">
+/// <![CDATA[
+/// var binding = this.Bind(ViewModel, vm => vm.UserName, v => v.UserNameTextBox.Text);
+/// binding.Changed.Subscribe(value => logger.LogInformation("UserName changed to {Value}", value));
+/// // Later
+/// binding.Dispose();
+/// ]]>
+/// </code>
+/// </example>
 public interface IReactiveBinding<out TView, out TValue> : IDisposable
     where TView : IViewFor
 {

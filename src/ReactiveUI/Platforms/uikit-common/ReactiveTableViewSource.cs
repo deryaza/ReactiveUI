@@ -1,12 +1,13 @@
-﻿// Copyright (c) 2025 .NET Foundation and Contributors. All rights reserved.
+// Copyright (c) 2009-2026 .NET Foundation and Contributors. All rights reserved.
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
 
 using System.Collections.Specialized;
-
+using System.ComponentModel;
+using System.Reactive.Subjects;
 using Foundation;
-
+using ReactiveUI.Helpers;
 using UIKit;
 
 namespace ReactiveUI;
@@ -18,14 +19,15 @@ namespace ReactiveUI;
 /// items are animated in and out as items are added.
 /// </summary>
 /// <typeparam name="TSource">The source type.</typeparam>
-#if NET6_0_OR_GREATER
-[RequiresDynamicCode("ReactiveTableViewSource uses methods that require dynamic code generation")]
-[RequiresUnreferencedCode("ReactiveTableViewSource uses methods that may require unreferenced code")]
-#endif
 public class ReactiveTableViewSource<TSource> : UITableViewSource, IReactiveNotifyPropertyChanged<ReactiveTableViewSource<TSource>>, IHandleObservableErrors, IReactiveObject
 {
+    /// <summary>The common reactive source that manages section data and drives table view updates.</summary>
     private readonly CommonReactiveSource<TSource, UITableView, UITableViewCell, TableSectionInformation<TSource>> _commonSource;
+
+    /// <summary>The subject that publishes items whenever a table view row is selected.</summary>
     private readonly Subject<object?> _elementSelected = new();
+
+    /// <summary>The adapter that bridges the UITableView with the reactive source.</summary>
     private readonly UITableViewAdapter _adapter;
 
     /// <summary>
@@ -35,23 +37,28 @@ public class ReactiveTableViewSource<TSource> : UITableViewSource, IReactiveNoti
     /// <param name="collection">The collection.</param>
     /// <param name="cellKey">The cell key.</param>
     /// <param name="sizeHint">The size hint.</param>
-    /// <param name="initializeCellAction">The initialize cell action.</param>
-#if NET6_0_OR_GREATER
-    [RequiresDynamicCode("ReactiveTableViewSource uses methods that require dynamic code generation")]
-    [RequiresUnreferencedCode("ReactiveTableViewSource uses methods that may require unreferenced code")]
-#endif
-    public ReactiveTableViewSource(UITableView tableView, INotifyCollectionChanged collection, NSString cellKey, float sizeHint, Action<UITableViewCell>? initializeCellAction = null)
-        : this(tableView) =>
-        Data = new[] { new TableSectionInformation<TSource, UITableViewCell>(collection, cellKey, sizeHint, initializeCellAction) };
+    public ReactiveTableViewSource(UITableView tableView, INotifyCollectionChanged collection, NSString cellKey, float sizeHint)
+        : this(tableView, collection, cellKey, sizeHint, null)
+    {
+    }
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ReactiveTableViewSource{TSource}"/> class.
     /// </summary>
     /// <param name="tableView">The table view.</param>
-#if NET6_0_OR_GREATER
-    [RequiresDynamicCode("ReactiveTableViewSource uses methods that require dynamic code generation")]
-    [RequiresUnreferencedCode("ReactiveTableViewSource uses methods that may require unreferenced code")]
-#endif
+    /// <param name="collection">The collection.</param>
+    /// <param name="cellKey">The cell key.</param>
+    /// <param name="sizeHint">The size hint.</param>
+    /// <param name="initializeCellAction">The initialize cell action.</param>
+    public ReactiveTableViewSource(UITableView tableView, INotifyCollectionChanged collection, NSString cellKey, float sizeHint, Action<UITableViewCell>? initializeCellAction)
+        : this(tableView) =>
+        Data = [new TableSectionInformation<TSource, UITableViewCell>(collection, cellKey, sizeHint, initializeCellAction)
+        ];
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ReactiveTableViewSource{TSource}"/> class.
+    /// </summary>
+    /// <param name="tableView">The table view.</param>
     public ReactiveTableViewSource(UITableView tableView)
     {
         _adapter = new UITableViewAdapter(tableView);
@@ -158,7 +165,7 @@ public class ReactiveTableViewSource<TSource> : UITableViewSource, IReactiveNoti
     /// <inheritdoc/>
     public override UITableViewCell GetCell(UITableView tableView, NSIndexPath indexPath)
     {
-        ArgumentNullException.ThrowIfNull(indexPath);
+        ArgumentExceptionHelper.ThrowIfNull(indexPath);
 
         return _commonSource.GetCell(indexPath);
     }
@@ -188,7 +195,7 @@ public class ReactiveTableViewSource<TSource> : UITableViewSource, IReactiveNoti
     /// <inheritdoc/>
     public override void RowSelected(UITableView tableView, NSIndexPath indexPath)
     {
-        ArgumentNullException.ThrowIfNull(indexPath);
+        ArgumentExceptionHelper.ThrowIfNull(indexPath);
 
         _elementSelected.OnNext(_commonSource.ItemAt(indexPath));
     }
@@ -196,7 +203,7 @@ public class ReactiveTableViewSource<TSource> : UITableViewSource, IReactiveNoti
     /// <inheritdoc/>
     public override nfloat GetHeightForRow(UITableView tableView, NSIndexPath indexPath)
     {
-        ArgumentNullException.ThrowIfNull(indexPath);
+        ArgumentExceptionHelper.ThrowIfNull(indexPath);
 
         return _commonSource.SectionInfo[indexPath.Section].SizeHint;
     }
@@ -270,7 +277,7 @@ public class ReactiveTableViewSource<TSource> : UITableViewSource, IReactiveNoti
     /// <returns>The item.</returns>
     public object? ItemAt(NSIndexPath indexPath)
     {
-        ArgumentNullException.ThrowIfNull(indexPath);
+        ArgumentExceptionHelper.ThrowIfNull(indexPath);
 
         return _commonSource.ItemAt(indexPath);
     }
@@ -282,10 +289,6 @@ public class ReactiveTableViewSource<TSource> : UITableViewSource, IReactiveNoti
     /// </summary>
     /// <returns>An object that, when disposed, re-enables change
     /// notifications.</returns>
-#if NET6_0_OR_GREATER
-    [RequiresDynamicCode("SuppressChangeNotifications uses methods that require dynamic code generation")]
-    [RequiresUnreferencedCode("SuppressChangeNotifications uses methods that may require unreferenced code")]
-#endif
     public IDisposable SuppressChangeNotifications() => IReactiveObjectExtensions.SuppressChangeNotifications(this);
 
     /// <inheritdoc/>

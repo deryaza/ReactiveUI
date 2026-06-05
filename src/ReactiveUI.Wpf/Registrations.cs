@@ -1,7 +1,9 @@
-﻿// Copyright (c) 2025 .NET Foundation and Contributors. All rights reserved.
+﻿// Copyright (c) 2009-2026 .NET Foundation and Contributors. All rights reserved.
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
+
+using ReactiveUI.Helpers;
 
 namespace ReactiveUI.Wpf;
 
@@ -11,42 +13,29 @@ namespace ReactiveUI.Wpf;
 public class Registrations : IWantsToRegisterStuff
 {
     /// <inheritdoc/>
-#if NET6_0_OR_GREATER
-    [RequiresDynamicCode("Register uses methods that require dynamic code generation")]
-    [RequiresUnreferencedCode("Register uses methods that may require unreferenced code")]
-    [SuppressMessage("Trimming", "IL2046:'RequiresUnreferencedCodeAttribute' annotations must match across all interface implementations or overrides.", Justification = "Not all paths use reflection")]
-    [SuppressMessage("AOT", "IL3051:'RequiresDynamicCodeAttribute' annotations must match across all interface implementations or overrides.", Justification = "Not all paths use reflection")]
-#endif
-    public void Register(Action<Func<object>, Type> registerFunction)
+    public void Register(IRegistrar registrar)
     {
-#if NET6_0_OR_GREATER
-        ArgumentNullException.ThrowIfNull(registerFunction);
-#else
-        if (registerFunction is null)
-        {
-            throw new ArgumentNullException(nameof(registerFunction));
-        }
-#endif
+        ArgumentExceptionHelper.ThrowIfNull(registrar);
 
-        registerFunction(() => new PlatformOperations(), typeof(IPlatformOperations));
+        registrar.RegisterConstant<IPlatformOperations>(static () => new PlatformOperations());
+        registrar.RegisterConstant<IActivationForViewFetcher>(static () => new ActivationForViewFetcher());
+        registrar.RegisterConstant<ICreatesObservableForProperty>(static () =>
+            new DependencyObjectObservableForProperty());
 
-        registerFunction(() => new ActivationForViewFetcher(), typeof(IActivationForViewFetcher));
-        registerFunction(() => new DependencyObjectObservableForProperty(), typeof(ICreatesObservableForProperty));
-        registerFunction(() => new StringConverter(), typeof(IBindingTypeConverter));
-        registerFunction(() => new SingleToStringTypeConverter(), typeof(IBindingTypeConverter));
-        registerFunction(() => new DoubleToStringTypeConverter(), typeof(IBindingTypeConverter));
-        registerFunction(() => new DecimalToStringTypeConverter(), typeof(IBindingTypeConverter));
-        registerFunction(() => new BooleanToVisibilityTypeConverter(), typeof(IBindingTypeConverter));
-        registerFunction(() => new AutoDataTemplateBindingHook(), typeof(IPropertyBindingHook));
-        registerFunction(() => new ComponentModelTypeConverter(), typeof(IBindingTypeConverter));
+        // WPF property binder that resolves inherited DependencyProperty metadata (see #4350).
+        registrar.RegisterConstant<IPropertyBinderImplementation>(static () => new WpfPropertyBinderImplementation());
 
-        if (!ModeDetector.InUnitTestRunner())
-        {
-            // NB: On .NET Core, trying to touch DispatcherScheduler blows up :cry:
-            RxApp.MainThreadScheduler = new WaitForDispatcherScheduler(() => DispatcherScheduler.Current);
-            RxApp.TaskpoolScheduler = TaskPoolScheduler.Default;
-        }
+        // WPF-specific command rebinding optimization
+        registrar.RegisterConstant<ICreatesCustomizedCommandRebinding>(static () =>
+            new WpfCommandRebindingCustomizer());
 
-        RxApp.SuppressViewCommandBindingMessage = true;
+        // WPF-specific converters
+        registrar.RegisterConstant<IBindingTypeConverter>(static () => new BooleanToVisibilityTypeConverter());
+        registrar.RegisterConstant<IBindingTypeConverter>(static () => new VisibilityToBooleanTypeConverter());
+
+        registrar.RegisterConstant<IPropertyBindingHook>(static () => new AutoDataTemplateBindingHook());
+        registrar.RegisterConstant<IBindingFallbackConverter>(static () => new ComponentModelFallbackConverter());
+
+        RxSchedulers.SuppressViewCommandBindingMessage = true;
     }
 }

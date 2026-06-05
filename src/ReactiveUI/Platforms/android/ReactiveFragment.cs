@@ -1,12 +1,14 @@
-﻿// Copyright (c) 2025 .NET Foundation and Contributors. All rights reserved.
+﻿// Copyright (c) 2009-2026 .NET Foundation and Contributors. All rights reserved.
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
 
+using System.ComponentModel;
+using System.Reactive;
 using System.Runtime.Versioning;
-
-using Android.App;
 using Android.Runtime;
+
+using ReactiveUI.Internal;
 
 namespace ReactiveUI;
 
@@ -14,14 +16,18 @@ namespace ReactiveUI;
 /// This is a Fragment that is both an Activity and has ReactiveObject powers
 /// (i.e. you can call RaiseAndSetIfChanged).
 /// </summary>
-#if NET6_0_OR_GREATER
-[RequiresDynamicCode("ReactiveFragment inherits from ReactiveObject which uses extension methods that require dynamic code generation")]
-[RequiresUnreferencedCode("ReactiveFragment inherits from ReactiveObject which uses extension methods that may require unreferenced code")]
-#endif
-public class ReactiveFragment : Fragment, IReactiveNotifyPropertyChanged<ReactiveFragment>, IReactiveObject, IHandleObservableErrors
+public class ReactiveFragment : Fragment, IReactiveNotifyPropertyChanged<ReactiveFragment>, IReactiveObject,
+    IHandleObservableErrors
 {
-    private readonly Subject<Unit> _activated = new();
-    private readonly Subject<Unit> _deactivated = new();
+    /// <summary>
+    /// The subject that signals when the fragment is activated.
+    /// </summary>
+    private readonly BroadcastSubject<Unit> _activated = new();
+
+    /// <summary>
+    /// The subject that signals when the fragment is deactivated.
+    /// </summary>
+    private readonly BroadcastSubject<Unit> _deactivated = new();
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ReactiveFragment"/> class.
@@ -62,7 +68,7 @@ public class ReactiveFragment : Fragment, IReactiveNotifyPropertyChanged<Reactiv
     /// <value>
     /// The activated.
     /// </value>
-    public IObservable<Unit> Activated => _activated.AsObservable();
+    public IObservable<Unit> Activated => _activated;
 
     /// <summary>
     /// Gets a signal when the fragment is deactivated.
@@ -70,7 +76,7 @@ public class ReactiveFragment : Fragment, IReactiveNotifyPropertyChanged<Reactiv
     /// <value>
     /// The deactivated.
     /// </value>
-    public IObservable<Unit> Deactivated => _deactivated.AsObservable();
+    public IObservable<Unit> Deactivated => _deactivated;
 
     /// <inheritdoc/>
     void IReactiveObject.RaisePropertyChanging(PropertyChangingEventArgs args) => PropertyChanging?.Invoke(this, args);

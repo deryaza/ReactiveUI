@@ -1,7 +1,9 @@
-﻿// Copyright (c) 2025 .NET Foundation and Contributors. All rights reserved.
+// Copyright (c) 2009-2026 .NET Foundation and Contributors. All rights reserved.
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
+
+using System.Reactive.Concurrency;
 
 namespace ReactiveUI;
 
@@ -13,7 +15,14 @@ namespace ReactiveUI;
 /// </summary>
 public class WaitForDispatcherScheduler : IScheduler
 {
+    /// <summary>
+    /// Factory function used to create the underlying dispatcher scheduler on demand.
+    /// </summary>
     private readonly Func<IScheduler> _schedulerFactory;
+
+    /// <summary>
+    /// Cached scheduler instance created by the factory, or null if creation has not yet succeeded.
+    /// </summary>
     private IScheduler? _scheduler;
 
     /// <summary>
@@ -24,10 +33,6 @@ public class WaitForDispatcherScheduler : IScheduler
     {
         _schedulerFactory = schedulerFactory;
 
-        // NB: Creating a scheduler will fail on WinRT if we attempt to do
-        // so on a non-UI thread, even if the underlying Dispatcher exists.
-        // We assume (hope?) that WaitForDispatcherScheduler will be created
-        // early enough that this won't be the case.
         AttemptToCreateScheduler();
     }
 
@@ -39,13 +44,29 @@ public class WaitForDispatcherScheduler : IScheduler
         AttemptToCreateScheduler().Schedule(state, action);
 
     /// <inheritdoc/>
-    public IDisposable Schedule<TState>(TState state, TimeSpan dueTime, Func<IScheduler, TState, IDisposable> action) => // TODO: Create Test
+    public IDisposable
+        Schedule<TState>(
+        TState state,
+        TimeSpan dueTime,
+        Func<IScheduler, TState, IDisposable> action) =>
         AttemptToCreateScheduler().Schedule(state, dueTime, action);
 
     /// <inheritdoc/>
-    public IDisposable Schedule<TState>(TState state, DateTimeOffset dueTime, Func<IScheduler, TState, IDisposable> action) => // TODO: Create Test
+    public IDisposable Schedule<TState>(
+        TState state,
+        DateTimeOffset dueTime,
+        Func<IScheduler, TState, IDisposable> action) =>
         AttemptToCreateScheduler().Schedule(state, dueTime, action);
 
+    /// <summary>
+    /// Attempts to create and return an instance of the scheduler. If the scheduler cannot be created, returns a
+    /// fallback scheduler instance.
+    /// </summary>
+    /// <remarks>This method caches the created scheduler instance for future calls. If the underlying
+    /// scheduler factory throws an <see cref="InvalidOperationException"/> or <see cref="ArgumentNullException"/>, the
+    /// method returns a scheduler that executes work on the current thread instead.</remarks>
+    /// <returns>An <see cref="IScheduler"/> instance. If the scheduler cannot be created due to the dispatcher not being ready,
+    /// returns <see cref="CurrentThreadScheduler.Instance"/> as a fallback.</returns>
     private IScheduler AttemptToCreateScheduler()
     {
         if (_scheduler is not null)
@@ -60,12 +81,10 @@ public class WaitForDispatcherScheduler : IScheduler
         }
         catch (InvalidOperationException)
         {
-            // NB: Dispatcher's not ready yet. Keep using CurrentThread
             return CurrentThreadScheduler.Instance;
         }
         catch (ArgumentNullException)
         {
-            // NB: Dispatcher's not ready yet. Keep using CurrentThread
             return CurrentThreadScheduler.Instance;
         }
     }

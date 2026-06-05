@@ -1,20 +1,17 @@
-// Copyright (c) 2025 .NET Foundation and Contributors. All rights reserved.
+// Copyright (c) 2009-2026 .NET Foundation and Contributors. All rights reserved.
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
 
+using System.Diagnostics.CodeAnalysis;
+using ReactiveUI.Helpers;
+
 namespace ReactiveUI.Testing;
-#pragma warning disable SA1402, SA1649, CA1040
-/// <summary>
-/// An interface for building.
-/// </summary>
-public interface IBuilder
-{
-}
 
 /// <summary>
 /// Default methods for the <see cref="IBuilder"/> abstraction.
 /// </summary>
+[SuppressMessage("Design", "CA1045:Do not pass types by reference", Justification = "The fluent builder mutates caller fields/collections in place by design.")]
 public static class IBuilderExtensions
 {
     /// <summary>
@@ -48,10 +45,7 @@ public static class IBuilderExtensions
         IEnumerable<TField> values)
         where TBuilder : IBuilder
     {
-        if (field is null)
-        {
-            throw new ArgumentNullException(nameof(field));
-        }
+        ArgumentExceptionHelper.ThrowIfNull(field);
 
         field.AddRange(values);
 
@@ -70,10 +64,7 @@ public static class IBuilderExtensions
     public static TBuilder With<TBuilder, TField>(this TBuilder builder, ref List<TField>? field, TField value)
         where TBuilder : IBuilder
     {
-        if (field is null)
-        {
-            throw new ArgumentNullException(nameof(field));
-        }
+        ArgumentExceptionHelper.ThrowIfNull(field);
 
         field.Add(value);
         return builder;
@@ -96,10 +87,7 @@ public static class IBuilderExtensions
         where TBuilder : IBuilder
         where TKey : notnull
     {
-        if (dictionary is null)
-        {
-            throw new ArgumentNullException(nameof(dictionary));
-        }
+        ArgumentExceptionHelper.ThrowIfNull(dictionary);
 
         dictionary.Add(keyValuePair.Key, keyValuePair.Value);
         return builder;
@@ -124,10 +112,7 @@ public static class IBuilderExtensions
         where TBuilder : IBuilder
         where TKey : notnull
     {
-        if (dictionary is null)
-        {
-            throw new ArgumentNullException(nameof(dictionary));
-        }
+        ArgumentExceptionHelper.ThrowIfNull(dictionary);
 
         dictionary.Add(key, value);
         return builder;
@@ -149,13 +134,9 @@ public static class IBuilderExtensions
         IDictionary<TKey, TField> keyValuePair)
         where TKey : notnull
     {
-        if (dictionary is null)
-        {
-            throw new ArgumentNullException(nameof(dictionary));
-        }
+        ArgumentExceptionHelper.ThrowIfNull(dictionary);
 
         dictionary = (Dictionary<TKey, TField>)keyValuePair;
         return builder;
     }
 }
-#pragma warning restore SA1402, SA1649, CA1040

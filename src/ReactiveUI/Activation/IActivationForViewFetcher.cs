@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2025 .NET Foundation and Contributors. All rights reserved.
+// Copyright (c) 2009-2026 .NET Foundation and Contributors. All rights reserved.
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
@@ -10,6 +10,31 @@ namespace ReactiveUI;
 /// View is activated or deactivated. This is usually only used when porting
 /// ReactiveUI to a new UI framework.
 /// </summary>
+/// <remarks>
+/// <para>
+/// Activation fetchers translate framework-specific signals (such as page navigation, focus, or visibility
+/// changes) into the cross-platform <see cref="IActivatableView"/> semantics used by ReactiveUI. Multiple
+/// fetchers can exist, each advertising an affinity for a given view type.
+/// </para>
+/// </remarks>
+/// <example>
+/// <code language="csharp">
+/// <![CDATA[
+/// public sealed class WinFormsActivationFetcher : IActivationForViewFetcher
+/// {
+///     public int GetAffinityForView(Type view) => typeof(Form).IsAssignableFrom(view) ? 10 : 0;
+///
+///     public IObservable<bool> GetActivationForView(IActivatableView view)
+///     {
+///         var form = (Form)view;
+///         return Observable.Merge(
+///             Observable.FromEventPattern(form, nameof(form.Load)).Select(_ => true),
+///             Observable.FromEventPattern(form, nameof(form.FormClosed)).Select(_ => false));
+///     }
+/// }
+/// ]]>
+/// </code>
+/// </example>
 public interface IActivationForViewFetcher
 {
     /// <summary>
@@ -30,9 +55,5 @@ public interface IActivationForViewFetcher
     /// </summary>
     /// <param name="view">The view to get the activation observable for.</param>
     /// <returns>A Observable which will returns if Activation was successful.</returns>
-#if NET6_0_OR_GREATER
-    [RequiresDynamicCode("GetActivationForView uses methods that require dynamic code generation")]
-    [RequiresUnreferencedCode("GetActivationForView uses methods that may require unreferenced code")]
-#endif
     IObservable<bool> GetActivationForView(IActivatableView view);
 }

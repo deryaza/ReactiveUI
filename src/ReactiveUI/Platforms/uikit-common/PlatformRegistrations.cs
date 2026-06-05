@@ -1,7 +1,11 @@
-// Copyright (c) 2025 .NET Foundation and Contributors. All rights reserved.
+// Copyright (c) 2009-2026 .NET Foundation and Contributors. All rights reserved.
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
+
+using System.Reactive.Concurrency;
+using ReactiveUI.Helpers;
+using Splat;
 
 namespace ReactiveUI;
 
@@ -13,24 +17,35 @@ namespace ReactiveUI;
 public class PlatformRegistrations : IWantsToRegisterStuff
 {
     /// <inheritdoc/>
-    [SuppressMessage("AOT", "IL3050:Calling members annotated with 'RequiresDynamicCodeAttribute' may break functionality when AOT compiling.", Justification = "Marked as Preserve")]
-    public void Register(Action<Func<object>, Type> registerFunction)
+    public void Register(IRegistrar registrar)
     {
-        ArgumentNullException.ThrowIfNull(registerFunction);
+        ArgumentExceptionHelper.ThrowIfNull(registrar);
 
-        registerFunction(() => new PlatformOperations(), typeof(IPlatformOperations));
-        registerFunction(() => new ComponentModelTypeConverter(), typeof(IBindingTypeConverter));
-        registerFunction(() => new UIKitObservableForProperty(), typeof(ICreatesObservableForProperty));
-        registerFunction(() => new UIKitCommandBinders(), typeof(ICreatesCommandBinding));
-        registerFunction(() => new DateTimeNSDateConverter(), typeof(IBindingTypeConverter));
-        registerFunction(() => new KVOObservableForProperty(), typeof(ICreatesObservableForProperty));
+        registrar.RegisterConstant<IPlatformOperations>(static () => new PlatformOperations());
+        registrar.RegisterConstant<IBindingFallbackConverter>(static () => new ComponentModelFallbackConverter());
+        registrar.RegisterConstant<ICreatesObservableForProperty>(static () => new UIKitObservableForProperty());
+        registrar.RegisterConstant<ICreatesCommandBinding>(static () => new UIKitCommandBinders());
+
+        // DateTime ↔ NSDate converters
+        registrar.RegisterConstant<IBindingTypeConverter>(static () => new DateTimeToNSDateConverter());
+        registrar.RegisterConstant<IBindingTypeConverter>(static () => new NullableDateTimeToNSDateConverter());
+        registrar.RegisterConstant<IBindingTypeConverter>(static () => new NSDateToDateTimeConverter());
+        registrar.RegisterConstant<IBindingTypeConverter>(static () => new NSDateToNullableDateTimeConverter());
+
+        // DateTimeOffset ↔ NSDate converters
+        registrar.RegisterConstant<IBindingTypeConverter>(static () => new DateTimeOffsetToNSDateConverter());
+        registrar.RegisterConstant<IBindingTypeConverter>(static () => new NullableDateTimeOffsetToNSDateConverter());
+        registrar.RegisterConstant<IBindingTypeConverter>(static () => new NSDateToDateTimeOffsetConverter());
+        registrar.RegisterConstant<IBindingTypeConverter>(static () => new NSDateToNullableDateTimeOffsetConverter());
+
+        registrar.RegisterConstant<ICreatesObservableForProperty>(static () => new KVOObservableForProperty());
 
         if (!ModeDetector.InUnitTestRunner())
         {
-            RxApp.TaskpoolScheduler = TaskPoolScheduler.Default;
-            RxApp.MainThreadScheduler = new WaitForDispatcherScheduler(() => new NSRunloopScheduler());
+            RxSchedulers.TaskpoolScheduler = TaskPoolScheduler.Default;
+            RxSchedulers.MainThreadScheduler = new WaitForDispatcherScheduler(static () => new NSRunloopScheduler());
         }
 
-        registerFunction(() => new AppSupportJsonSuspensionDriver(), typeof(ISuspensionDriver));
+        registrar.RegisterConstant<ISuspensionDriver>(static () => new AppSupportJsonSuspensionDriver());
     }
 }

@@ -1,8 +1,9 @@
-﻿// Copyright (c) 2025 .NET Foundation and Contributors. All rights reserved.
+// Copyright (c) 2009-2026 .NET Foundation and Contributors. All rights reserved.
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
 
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.Maui.Controls;
 
 namespace ReactiveUI.Maui;
@@ -13,23 +14,27 @@ namespace ReactiveUI.Maui;
 /// <typeparam name="TViewModel">The type of the view model.</typeparam>
 /// <seealso cref="SwitchCell" />
 /// <seealso cref="IViewFor{TViewModel}" />
-#if NET6_0_OR_GREATER
-[RequiresDynamicCode("ReactiveSwitchCell uses methods that require dynamic code generation")]
-[RequiresUnreferencedCode("ReactiveSwitchCell uses methods that may require unreferenced code")]
-#endif
-public partial class ReactiveSwitchCell<TViewModel> : SwitchCell, IViewFor<TViewModel>
+[Obsolete(
+    "ListView and its cells are obsolete in .NET MAUI, please use CollectionView with a DataTemplate and a ReactiveContentView-based view instead. This will be removed in a future release.")]
+[SuppressMessage(
+    "Info Code Smell",
+    "S1133:Deprecated code should be removed",
+    Justification = "Intentional public API deprecation retained for backwards compatibility.")]
+[ExcludeFromCodeCoverage]
+public class ReactiveSwitchCell<
+    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes
+        .PublicParameterlessConstructor)]
+    TViewModel> : SwitchCell, IViewFor<TViewModel>
     where TViewModel : class
 {
     /// <summary>
     /// The view model bindable property.
     /// </summary>
     public static readonly BindableProperty ViewModelProperty = BindableProperty.Create(
-     nameof(ViewModel),
-     typeof(TViewModel),
-     typeof(ReactiveSwitchCell<TViewModel>),
-     default(TViewModel),
-     BindingMode.OneWay,
-     propertyChanged: OnViewModelChanged);
+        nameof(ViewModel),
+        typeof(TViewModel),
+        typeof(ReactiveSwitchCell<TViewModel>),
+        propertyChanged: OnViewModelChanged);
 
     /// <inheritdoc/>
     public TViewModel? ViewModel
@@ -52,5 +57,12 @@ public partial class ReactiveSwitchCell<TViewModel> : SwitchCell, IViewFor<TView
         ViewModel = BindingContext as TViewModel;
     }
 
-    private static void OnViewModelChanged(BindableObject bindableObject, object oldValue, object newValue) => bindableObject.BindingContext = newValue;
+    /// <summary>
+    /// Updates the binding context when the view model changes.
+    /// </summary>
+    /// <param name="bindableObject">The bindable object whose property changed.</param>
+    /// <param name="oldValue">The previous value.</param>
+    /// <param name="newValue">The new value.</param>
+    private static void OnViewModelChanged(BindableObject bindableObject, object oldValue, object newValue) =>
+        bindableObject.BindingContext = newValue;
 }

@@ -1,0 +1,173 @@
+// Copyright (c) 2009-2026 .NET Foundation and Contributors. All rights reserved.
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+// See the LICENSE file in the project root for full license information.
+
+using System.Reactive.Concurrency;
+using System.Reactive.Disposables;
+
+namespace ReactiveUI.Tests;
+
+/// <summary>
+///     Tests for <see cref="WaitForDispatcherScheduler" />.
+/// </summary>
+public class WaitForDispatcherSchedulerTests
+{
+    /// <summary>
+    ///     Tests call scheduler factory on creation.
+    /// </summary>
+    /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
+    [Test]
+    public async Task CallSchedulerFactoryOnCreation()
+    {
+        var schedulerFactoryCalls = 0;
+        var schedulerFactory = new Func<IScheduler>(() =>
+        {
+            schedulerFactoryCalls++;
+            return null!;
+        });
+
+        _ = new WaitForDispatcherScheduler(schedulerFactory);
+
+        await Assert.That(schedulerFactoryCalls).IsEqualTo(1);
+    }
+
+    /// <summary>
+    ///     Calls that factories throws argument null exception falls back to current thread.
+    /// </summary>
+    /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
+    [Test]
+    public async Task FactoryThrowsArgumentNullException_FallsBackToCurrentThread()
+    {
+        IScheduler? schedulerExecutedOn = null;
+        var schedulerFactory = new Func<IScheduler>(() => throw new ArgumentNullException());
+        var sut = new WaitForDispatcherScheduler(schedulerFactory);
+        sut.Schedule<object>(
+            null!,
+            (scheduler, _) =>
+            {
+                schedulerExecutedOn = scheduler;
+                return Disposable.Empty;
+            });
+
+        await Assert.That(schedulerExecutedOn).IsEqualTo(CurrentThreadScheduler.Instance);
+    }
+
+    /// <summary>
+    ///     Tests that factory throws exception re calls on schedule.
+    /// </summary>
+    /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
+    [Test]
+    public async Task FactoryThrowsException_ReCallsOnSchedule()
+    {
+        var schedulerFactoryCalls = 0;
+        var schedulerFactory = new Func<IScheduler>(() =>
+        {
+            schedulerFactoryCalls++;
+            throw new InvalidOperationException();
+        });
+
+        var sut = new WaitForDispatcherScheduler(schedulerFactory);
+        sut.Schedule(() => { });
+
+        const int ExpectedFactoryCalls = 2;
+        await Assert.That(schedulerFactoryCalls).IsEqualTo(ExpectedFactoryCalls);
+    }
+
+    /// <summary>
+    ///     Tests that when the factory first throws but later succeeds, the scheduler is cached and reused.
+    ///     This covers the regression where WpfMainThreadScheduler falls back to CurrentThreadScheduler when
+    ///     Schedule is called from a non-UI thread before the WPF Application Dispatcher is available.
+    /// </summary>
+    /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
+    [Test]
+    public async Task FactoryThrowsThenSucceeds_CachesSuccessfulScheduler()
+    {
+        var schedulerFactoryCalls = 0;
+        var successScheduler = CurrentThreadScheduler.Instance;
+        var schedulerFactory = new Func<IScheduler>(() =>
+        {
+            schedulerFactoryCalls++;
+            if (schedulerFactoryCalls == 1)
+            {
+                throw new InvalidOperationException("Dispatcher not ready yet.");
+            }
+
+            return successScheduler;
+        });
+
+        var sut = new WaitForDispatcherScheduler(schedulerFactory);
+
+        // First Schedule call — factory throws, falls back to CurrentThreadScheduler (not cached)
+        IScheduler? firstCallScheduler = null;
+        sut.Schedule<object>(
+            null!,
+            (scheduler, _) =>
+            {
+                firstCallScheduler = scheduler;
+                return Disposable.Empty;
+            });
+
+        // Second Schedule call — factory succeeds, result is cached
+        IScheduler? secondCallScheduler = null;
+        sut.Schedule<object>(
+            null!,
+            (scheduler, _) =>
+            {
+                secondCallScheduler = scheduler;
+                return Disposable.Empty;
+            });
+
+        // Third Schedule call — uses cached scheduler, factory not called again
+        var callsBeforeThird = schedulerFactoryCalls;
+        sut.Schedule<object>(
+            null!,
+            (_, _) => Disposable.Empty);
+
+        await Assert.That(firstCallScheduler).IsEqualTo(CurrentThreadScheduler.Instance);
+        await Assert.That(secondCallScheduler).IsEqualTo(successScheduler);
+        await Assert.That(schedulerFactoryCalls).IsEqualTo(callsBeforeThird);
+    }
+
+    /// <summary>
+    ///     Tests that factories throws invalid operation exception falls back to current thread.
+    /// </summary>
+    /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
+    [Test]
+    public async Task FactoryThrowsInvalidOperationException_FallsBackToCurrentThread()
+    {
+        IScheduler schedulerExecutedOn = null!;
+        var schedulerFactory = new Func<IScheduler>(() => throw new InvalidOperationException());
+
+        var sut = new WaitForDispatcherScheduler(schedulerFactory);
+        sut.Schedule<object>(
+            null!,
+            (scheduler, _) =>
+            {
+                schedulerExecutedOn = scheduler;
+                return Disposable.Empty;
+            });
+
+        await Assert.That(schedulerExecutedOn).IsEqualTo(CurrentThreadScheduler.Instance);
+    }
+
+    /// <summary>
+    ///     Tests that factory uses cached scheduler.
+    /// </summary>
+    /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
+    [Test]
+    public async Task SuccessfulFactory_UsesCachedScheduler()
+    {
+        var schedulerFactoryCalls = 0;
+        var schedulerFactory = new Func<IScheduler>(() =>
+        {
+            schedulerFactoryCalls++;
+            return CurrentThreadScheduler.Instance;
+        });
+
+        var sut = new WaitForDispatcherScheduler(schedulerFactory);
+        sut.Schedule(() => { });
+
+        await Assert.That(schedulerFactoryCalls).IsEqualTo(1);
+    }
+}

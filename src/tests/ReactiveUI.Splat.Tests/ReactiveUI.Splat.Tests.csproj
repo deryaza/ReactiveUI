@@ -1,0 +1,15 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>$(ReactiveUITestingTargets)</TargetFrameworks>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Splat.Autofac"/>
+    <PackageReference Include="Splat.DryIoc"/>
+    <PackageReference Include="Splat.Ninject"/>
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\ReactiveUI\ReactiveUI.csproj"/>
+  </ItemGroup>
+</Project>

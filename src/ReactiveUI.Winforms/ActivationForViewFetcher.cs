@@ -1,10 +1,13 @@
-﻿// Copyright (c) 2025 .NET Foundation and Contributors. All rights reserved.
+// Copyright (c) 2009-2026 .NET Foundation and Contributors. All rights reserved.
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
 
+using System.ComponentModel;
 using System.Globalization;
 using System.Reflection;
+using ReactiveUI.Internal;
+using Splat;
 
 namespace ReactiveUI.Winforms;
 
@@ -15,84 +18,100 @@ namespace ReactiveUI.Winforms;
 /// </summary>
 public class ActivationForViewFetcher : IActivationForViewFetcher, IEnableLogger
 {
+    /// <summary>Caches whether the control is being used at design time.</summary>
     private bool? _isDesignModeCache;
 
     /// <inheritdoc/>
-    public int GetAffinityForView(Type view) => typeof(Control).GetTypeInfo().IsAssignableFrom(view.GetTypeInfo()) ? 10 : 0;
+    public int GetAffinityForView(Type view) =>
+        typeof(Control).GetTypeInfo().IsAssignableFrom(view.GetTypeInfo()) ? BindingAffinity.ExactType : 0;
 
     /// <inheritdoc/>
-#if NET6_0_OR_GREATER
-    [RequiresDynamicCode("GetActivationForView uses methods that require dynamic code generation")]
-    [RequiresUnreferencedCode("GetActivationForView uses methods that may require unreferenced code")]
-#endif
     public IObservable<bool> GetActivationForView(IActivatableView view)
+    {
+        switch (view)
+        {
+            case Control control:
+                // We are very likely being called from control's constructor, which means control.Site is not yet set.
+                // We must delay the design mode check until after one of the activation events fires.
+                return new WhereObservable<bool>(GetActivationForControl(control), _ => !GetCachedIsDesignMode(control));
+
+            case null:
+                {
+                    this.Log().Warn(
+                        CultureInfo.InvariantCulture,
+                        "Expected a view of type System.Windows.Forms.Control it was null");
+                    break;
+                }
+
+            default:
+                {
+                    // Show a friendly warning in the log that this view will never be activated
+                    this.Log().Warn(
+                        CultureInfo.InvariantCulture,
+                        "Expected a view of type System.Windows.Forms.Control but it is {0}.\r\nYou need to implement your own IActivationForViewFetcher for {0}.",
+                        view.GetType());
+                    break;
+                }
+        }
+
+        return EmptyObservable<bool>.Instance;
+    }
+
+    /// <summary>Builds the activation observable for a WinForms control, including form lifecycle when applicable.</summary>
+    /// <param name="control">The control to observe.</param>
+    /// <returns>An observable that signals when the control is activated and deactivated.</returns>
+    private static MergedDistinctObservable<bool> GetActivationForControl(Control control)
     {
         // Startup: Control.HandleCreated > Control.BindingContextChanged > Form.Load > Control.VisibleChanged > Form.Activated > Form.Shown
         // Shutdown: Form.Closing > Form.FormClosing > Form.Closed > Form.FormClosed > Form.Deactivate
         // https://docs.microsoft.com/en-us/dotnet/framework/winforms/order-of-events-in-windows-forms
-        if (view is Control control)
+        var handleDestroyed = new FromEventObservable<bool>(onNext =>
         {
-            if (GetCachedIsDesignMode(control))
-            {
-                return Observable<bool>.Empty;
-            }
+            void Handler(object? sender, EventArgs e) => onNext(false);
+            control.HandleDestroyed += Handler;
+            return new ActionDisposable(() => control.HandleDestroyed -= Handler);
+        });
 
-            var handleDestroyed = Observable.FromEvent<EventHandler, bool>(
-                                                                           eventHandler => (_, _) => eventHandler(false),
-                                                                           h => control.HandleDestroyed += h,
-                                                                           h => control.HandleDestroyed -= h);
+        var handleCreated = new FromEventObservable<bool>(onNext =>
+        {
+            void Handler(object? sender, EventArgs e) => onNext(true);
+            control.HandleCreated += Handler;
+            return new ActionDisposable(() => control.HandleCreated -= Handler);
+        });
 
-            var handleCreated = Observable.FromEvent<EventHandler, bool>(
-                                                                         eventHandler => (_, _) => eventHandler(true),
-                                                                         h => control.HandleCreated += h,
-                                                                         h => control.HandleCreated -= h);
+        var visibleChanged = new FromEventObservable<bool>(onNext =>
+        {
+            void Handler(object? sender, EventArgs e) => onNext(control.Visible);
+            control.VisibleChanged += Handler;
+            return new ActionDisposable(() => control.VisibleChanged -= Handler);
+        });
 
-            var visibleChanged = Observable.FromEvent<EventHandler, bool>(
-                                                                          eventHandler => (_, _) => eventHandler(control.Visible),
-                                                                          h => control.VisibleChanged += h,
-                                                                          h => control.VisibleChanged -= h);
-
-            var controlActivation = Observable.Merge(handleDestroyed, handleCreated, visibleChanged)
-                                              .DistinctUntilChanged();
-
-            if (view is Form form)
-            {
-                var formClosed = Observable.FromEvent<FormClosedEventHandler, bool>(
-                 eventHandler =>
-                 {
-                     void Handler(object? sender, FormClosedEventArgs e) => eventHandler(control.Visible);
-                     return Handler;
-                 },
-                 h => form.FormClosed += h,
-                 h => form.FormClosed -= h);
-                controlActivation = controlActivation.Merge(formClosed)
-                                                     .DistinctUntilChanged();
-            }
-
-            return controlActivation;
+        if (control is not Form form)
+        {
+            // Replaces Merge(handleDestroyed, handleCreated, visibleChanged).DistinctUntilChanged().
+            return new(handleDestroyed, handleCreated, visibleChanged);
         }
 
-        if (view is null)
+        var formClosed = new FromEventObservable<bool>(onNext =>
         {
-            this.Log().Warn(
-                            CultureInfo.InvariantCulture,
-                            "Expected a view of type System.Windows.Forms.Control it was null");
-        }
-        else
-        {
-            // Show a friendly warning in the log that this view will never be activated
-            this.Log().Warn(
-                            CultureInfo.InvariantCulture,
-                            "Expected a view of type System.Windows.Forms.Control but it is {0}.\r\nYou need to implement your own IActivationForViewFetcher for {0}.",
-                            view.GetType());
-        }
+            void Handler(object? sender, FormClosedEventArgs e) => onNext(control.Visible);
+            form.FormClosed += Handler;
+            return new ActionDisposable(() => form.FormClosed -= Handler);
+        });
 
-        return Observable<bool>.Empty;
+        // Replaces Merge(...).Merge(formClosed).DistinctUntilChanged().
+        return new(handleDestroyed, handleCreated, visibleChanged, formClosed);
     }
 
+    /// <summary>Determines whether the control is currently running at design time.</summary>
+    /// <param name="control">The control to inspect.</param>
+    /// <returns>true if the control is in design mode; otherwise, false.</returns>
     private static bool GetIsDesignMode(Control control) =>
-        LicenseManager.UsageMode == LicenseUsageMode.Designtime || control.Site?.DesignMode == true || control.Parent?.Site?.DesignMode == true;
+        LicenseManager.UsageMode == LicenseUsageMode.Designtime || control.GetIsAncestorSiteInDesignMode();
 
+    /// <summary>Gets the cached design-mode state for the control, computing it on first access.</summary>
+    /// <param name="control">The control to inspect.</param>
+    /// <returns>true if the control is in design mode; otherwise, false.</returns>
     private bool GetCachedIsDesignMode(Control control)
     {
         _isDesignModeCache ??= GetIsDesignMode(control);

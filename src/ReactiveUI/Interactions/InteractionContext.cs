@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2025 .NET Foundation and Contributors. All rights reserved.
+// Copyright (c) 2009-2026 .NET Foundation and Contributors. All rights reserved.
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
@@ -14,7 +14,23 @@ namespace ReactiveUI;
 /// the input to the interaction, whilst the <see cref="SetOutput"/> method allows a handler to provide the
 /// output.
 /// </para>
+/// <para>
+/// Calling <see cref="SetOutput"/> more than once throws an <see cref="InvalidOperationException"/>, ensuring the
+/// handler's reply remains deterministic even when multiple handlers run concurrently. Use <see cref="IsHandled"/>
+/// to guard logic that should only execute once.
+/// </para>
 /// </remarks>
+/// <example>
+/// <code language="csharp">
+/// <![CDATA[
+/// viewModel.ConfirmDelete.RegisterHandler(async ctx =>
+/// {
+///     var approved = await dialogService.ShowAsync(ctx.Input);
+///     ctx.SetOutput(approved);
+/// });
+/// ]]>
+/// </code>
+/// </example>
 /// <typeparam name="TInput">
 /// The type of the interaction's input.
 /// </typeparam>
@@ -23,9 +39,16 @@ namespace ReactiveUI;
 /// </typeparam>
 public sealed class InteractionContext<TInput, TOutput> : IOutputContext<TInput, TOutput>
 {
+    /// <summary>The output value set by the handler.</summary>
     private TOutput _output = default!;
+
+    /// <summary>Indicates whether the output has been set (1) or not (0).</summary>
     private int _outputSet;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="InteractionContext{TInput, TOutput}"/> class with the specified input.
+    /// </summary>
+    /// <param name="input">The input for the interaction.</param>
     internal InteractionContext(TInput input) => Input = input;
 
     /// <inheritdoc />

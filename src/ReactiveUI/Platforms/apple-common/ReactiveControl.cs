@@ -1,8 +1,13 @@
-﻿// Copyright (c) 2025 .NET Foundation and Contributors. All rights reserved.
+// Copyright (c) 2009-2026 .NET Foundation and Contributors. All rights reserved.
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
 
+using System.ComponentModel;
+using System.Diagnostics.CodeAnalysis;
+using System.Reactive;
+using System.Reactive.Concurrency;
+using System.Reactive.Subjects;
 using CoreGraphics;
 using Foundation;
 
@@ -10,6 +15,7 @@ using Foundation;
 using UIKit;
 #else
 using AppKit;
+
 using UIControl = AppKit.NSControl;
 #endif
 
@@ -19,13 +25,12 @@ namespace ReactiveUI;
 /// This is a UIControl that is both and UIControl and has a ReactiveObject powers
 /// (i.e. you can call RaiseAndSetIfChanged).
 /// </summary>
-#if NET6_0_OR_GREATER
-[RequiresDynamicCode("ReactiveControl inherits from ReactiveObject which uses extension methods that require dynamic code generation")]
-[RequiresUnreferencedCode("ReactiveControl inherits from ReactiveObject which uses extension methods that may require unreferenced code")]
-#endif
 public class ReactiveControl : UIControl, IReactiveNotifyPropertyChanged<ReactiveControl>, IHandleObservableErrors, IReactiveObject, ICanActivate, ICanForceManualActivation
 {
+    /// <summary>The subject that emits when the control is deactivated (removed from its superview).</summary>
     private readonly Subject<Unit> _deactivated = new();
+
+    /// <summary>The subject that emits when the control is activated (added to a superview).</summary>
     private readonly Subject<Unit> _activated = new();
 
     /// <summary>
@@ -90,18 +95,18 @@ public class ReactiveControl : UIControl, IReactiveNotifyPropertyChanged<Reactiv
     /// <summary>
     /// Gets a observable when the control is activated.
     /// </summary>
-    public new IObservable<Unit> Activated => _activated.AsObservable();
+    public new IObservable<Unit> Activated => _activated;
 #else
     /// <summary>
     /// Gets a observable when the control is activated.
     /// </summary>
-    public IObservable<Unit> Activated => _activated.AsObservable();
+    public IObservable<Unit> Activated => _activated;
 #endif
 
     /// <summary>
     /// Gets a observable that occurs when the control is deactivated.
     /// </summary>
-    public IObservable<Unit> Deactivated => _deactivated.AsObservable();
+    public IObservable<Unit> Deactivated => _deactivated;
 
 #if UIKIT
     /// <inheritdoc/>
@@ -120,9 +125,9 @@ public class ReactiveControl : UIControl, IReactiveNotifyPropertyChanged<Reactiv
     }
 
     /// <inheritdoc/>
-    void ICanForceManualActivation.Activate(bool activate) =>
-        RxApp.MainThreadScheduler.Schedule(() =>
-            (activate ? _activated : _deactivated).OnNext(Unit.Default));
+    void ICanForceManualActivation.Activate(bool shouldActivate) =>
+        RxSchedulers.MainThreadScheduler.Schedule(() =>
+            (shouldActivate ? _activated : _deactivated).OnNext(Unit.Default));
 
     /// <inheritdoc/>
     void IReactiveObject.RaisePropertyChanging(PropertyChangingEventArgs args) => PropertyChanging?.Invoke(this, args);
@@ -158,13 +163,10 @@ public class ReactiveControl : UIControl, IReactiveNotifyPropertyChanged<Reactiv
 /// </summary>
 /// <typeparam name="TViewModel">The view model type.</typeparam>
 [SuppressMessage("StyleCop.CSharp.MaintainabilityRules", "SA1402:FileMayOnlyContainASingleType", Justification = "Classes with the same class names within.")]
-#if NET6_0_OR_GREATER
-[RequiresDynamicCode("ReactiveControl<TViewModel> inherits from ReactiveObject which uses extension methods that require dynamic code generation")]
-[RequiresUnreferencedCode("ReactiveControl<TViewModel> inherits from ReactiveObject which uses extension methods that may require unreferenced code")]
-#endif
 public abstract class ReactiveControl<TViewModel> : ReactiveControl, IViewFor<TViewModel>
     where TViewModel : class
 {
+    /// <summary>The backing field for the <see cref="ViewModel"/> property.</summary>
     private TViewModel? _viewModel;
 
     /// <summary>

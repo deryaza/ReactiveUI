@@ -1,8 +1,9 @@
-﻿// Copyright (c) 2025 .NET Foundation and Contributors. All rights reserved.
+﻿// Copyright (c) 2009-2026 .NET Foundation and Contributors. All rights reserved.
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
 
+using ReactiveUI.Helpers;
 using Splat.Builder;
 
 namespace ReactiveUI.Testing;
@@ -12,21 +13,34 @@ namespace ReactiveUI.Testing;
 /// </summary>
 public static class RxTest
 {
+    /// <summary>
+    /// The default maximum wait in milliseconds used when none is supplied.
+    /// </summary>
+    private const int DefaultMaxWaitMs = 60000;
+
+    /// <summary>
+    /// The global gate that serializes AppBuilder tests so they do not run concurrently.
+    /// </summary>
     private static readonly SemaphoreSlim TestGate = new(1, 1);
 
     /// <summary>
     /// Applications the builder test asynchronous.
     /// </summary>
     /// <param name="testBody">The test body.</param>
-    /// <param name="maxWaitMs">The maximum wait in milliseconds for both acquiring the test gate and running the test body.</param>
-    /// <exception cref="System.ArgumentNullException">testBody.</exception>
+    /// <exception cref="ArgumentNullException">testBody.</exception>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
-    public static async Task AppBuilderTestAsync(Func<Task> testBody, int maxWaitMs = 60000)
+    public static Task AppBuilderTestAsync(Func<Task> testBody) => AppBuilderTestAsync(testBody, DefaultMaxWaitMs);
+
+    /// <summary>
+    /// Applications the builder test asynchronous.
+    /// </summary>
+    /// <param name="testBody">The test body.</param>
+    /// <param name="maxWaitMs">The maximum wait in milliseconds for both acquiring the test gate and running the test body.</param>
+    /// <exception cref="ArgumentNullException">testBody.</exception>
+    /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
+    public static async Task AppBuilderTestAsync(Func<Task> testBody, int maxWaitMs)
     {
-        if (testBody is null)
-        {
-            throw new ArgumentNullException(nameof(testBody));
-        }
+        ArgumentExceptionHelper.ThrowIfNull(testBody);
 
         // Try to acquire the global test gate with timeout to avoid deadlocks in CI.
         if (!await TestGate.WaitAsync(maxWaitMs).ConfigureAwait(false))

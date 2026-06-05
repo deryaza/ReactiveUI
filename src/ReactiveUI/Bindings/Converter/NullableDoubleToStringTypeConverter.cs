@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2025 .NET Foundation and Contributors. All rights reserved.
+// Copyright (c) 2009-2026 .NET Foundation and Contributors. All rights reserved.
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
@@ -6,72 +6,41 @@
 namespace ReactiveUI;
 
 /// <summary>
-/// Double To String Type Converter.
+/// Converts nullable <see cref="double"/> values to <see cref="string"/>.
 /// </summary>
-/// <seealso cref="ReactiveUI.IBindingTypeConverter" />
-public class NullableDoubleToStringTypeConverter : IBindingTypeConverter
+public sealed class NullableDoubleToStringTypeConverter : BindingTypeConverter<double?, string>
 {
     /// <inheritdoc/>
-    public int GetAffinityForObjects(Type fromType, Type toType)
-    {
-        if (fromType == typeof(double?) && toType == typeof(string))
-        {
-            return 10;
-        }
-
-        if (fromType == typeof(string) && toType == typeof(double?))
-        {
-            return 10;
-        }
-
-        return 0;
-    }
+    public override int GetAffinityForObjects() => BindingAffinity.DefaultInternalTypeConverter;
 
     /// <inheritdoc/>
-    public bool TryConvert(object? from, Type toType, object? conversionHint, out object result)
+    public override bool TryConvert(double? from, object? conversionHint, out string? result)
     {
-        if (toType == typeof(string) && from is double fromDouble)
+        if (!from.HasValue)
         {
-            if (conversionHint is int doubleHint)
-            {
-                result = fromDouble.ToString($"F{doubleHint}");
-                return true;
-            }
-
-            result = fromDouble.ToString();
+            result = null;
             return true;
         }
 
-        if (from is null)
+        switch (conversionHint)
         {
-            result = null!;
-            return true;
-        }
-
-        if (from is string fromString)
-        {
-            if (string.IsNullOrEmpty(fromString))
-            {
-                result = null!;
-                return true;
-            }
-
-            var success = double.TryParse(fromString, out var outDouble);
-            if (success)
-            {
-                if (conversionHint is int doubleHint)
+            case int decimalPlaces:
                 {
-                    result = Math.Round(outDouble, doubleHint);
+                    result = from.Value.ToString($"F{decimalPlaces}");
                     return true;
                 }
 
-                result = outDouble;
+            case string format:
+                {
+                    result = from.Value.ToString(format);
+                    return true;
+                }
 
-                return true;
-            }
+            default:
+                {
+                    result = from.Value.ToString(System.Globalization.CultureInfo.CurrentCulture);
+                    return true;
+                }
         }
-
-        result = null!;
-        return false;
     }
 }

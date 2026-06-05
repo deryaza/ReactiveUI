@@ -1,0 +1,108 @@
+// Copyright (c) 2009-2026 .NET Foundation and Contributors. All rights reserved.
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+// See the LICENSE file in the project root for full license information.
+
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
+using ReactiveUI.Maui.Internal;
+
+namespace ReactiveUI.Maui.Tests.Internal;
+
+/// <summary>
+/// Tests for MauiReactiveHelpers.
+/// </summary>
+public sealed class MauiReactiveHelpersTest
+{
+    /// <summary>
+    /// Tests that CreatePropertyChangedPulse emits when the property changes.
+    /// </summary>
+    /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
+    [Test]
+    public async Task CreatePropertyChangedPulse_EmitsWhenPropertyChanges()
+    {
+        var vm = new TestViewModel();
+        var changes = 0;
+        using var sub = MauiReactiveHelpers.CreatePropertyChangedPulse(vm, nameof(TestViewModel.Name))
+            .Subscribe(_ => changes++);
+
+        vm.Name = "New Name";
+
+        await Assert.That(changes).IsEqualTo(1);
+    }
+
+    /// <summary>
+    /// Tests that CreatePropertyChangedPulse does not emit for other properties.
+    /// </summary>
+    /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
+    [Test]
+    public async Task CreatePropertyChangedPulse_DoesNotEmitForOtherProperties()
+    {
+        var vm = new TestViewModel();
+        var changes = 0;
+        using var sub = MauiReactiveHelpers.CreatePropertyChangedPulse(vm, "OtherProperty")
+            .Subscribe(_ => changes++);
+
+        vm.Name = "New Name";
+
+        await Assert.That(changes).IsEqualTo(0);
+    }
+
+    /// <summary>
+    /// Tests that CreatePropertyValueObservable emits initial and subsequent values.
+    /// </summary>
+    /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
+    [Test]
+    public async Task CreatePropertyValueObservable_EmitsInitialAndSubsequentValues()
+    {
+        var vm = new TestViewModel { Name = "Initial" };
+        var values = new List<string?>();
+
+        using var sub = MauiReactiveHelpers.CreatePropertyValueObservable(
+                vm,
+                nameof(TestViewModel.Name),
+                () => vm.Name)
+            .Subscribe(values.Add);
+
+        vm.Name = "Updated";
+
+        const int expectedValueCount = 2;
+        await Assert.That(values.Count).IsEqualTo(expectedValueCount);
+        await Assert.That(values[0]).IsEqualTo("Initial");
+        await Assert.That(values[1]).IsEqualTo("Updated");
+    }
+
+    /// <summary>
+    /// Test view model that raises property change notifications.
+    /// </summary>
+    private sealed class TestViewModel : INotifyPropertyChanged
+    {
+        /// <summary>
+        /// The backing field for <see cref="Name"/>.
+        /// </summary>
+        private string? _name;
+
+        /// <inheritdoc/>
+        public event PropertyChangedEventHandler? PropertyChanged;
+
+        /// <summary>
+        /// Gets or sets the name.
+        /// </summary>
+        public string? Name
+        {
+            get => _name;
+            set
+            {
+                _name = value;
+                OnPropertyChanged();
+            }
+        }
+
+        /// <summary>
+        /// Raises the <see cref="PropertyChanged"/> event.
+        /// </summary>
+        /// <param name="propertyName">The name of the property that changed.</param>
+        private void OnPropertyChanged([CallerMemberName] string? propertyName = null) =>
+            PropertyChanged?.Invoke(this, new(propertyName));
+    }
+}

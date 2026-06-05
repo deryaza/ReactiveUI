@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2025 .NET Foundation and Contributors. All rights reserved.
+// Copyright (c) 2009-2026 .NET Foundation and Contributors. All rights reserved.
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
@@ -6,72 +6,41 @@
 namespace ReactiveUI;
 
 /// <summary>
-/// Single To String Type Converter.
+/// Converts nullable <see cref="float"/> values to <see cref="string"/>.
 /// </summary>
-/// <seealso cref="ReactiveUI.IBindingTypeConverter" />
-public class NullableSingleToStringTypeConverter : IBindingTypeConverter
+public sealed class NullableSingleToStringTypeConverter : BindingTypeConverter<float?, string>
 {
     /// <inheritdoc/>
-    public int GetAffinityForObjects(Type fromType, Type toType)
-    {
-        if (fromType == typeof(float?) && toType == typeof(string))
-        {
-            return 10;
-        }
-
-        if (fromType == typeof(string) && toType == typeof(float?))
-        {
-            return 10;
-        }
-
-        return 0;
-    }
+    public override int GetAffinityForObjects() => BindingAffinity.DefaultInternalTypeConverter;
 
     /// <inheritdoc/>
-    public bool TryConvert(object? from, Type toType, object? conversionHint, out object result)
+    public override bool TryConvert(float? from, object? conversionHint, out string? result)
     {
-        if (toType == typeof(string) && from is float fromSingle)
+        if (!from.HasValue)
         {
-            if (conversionHint is int singleHint)
-            {
-                result = fromSingle.ToString($"F{singleHint}");
-                return true;
-            }
-
-            result = fromSingle.ToString();
+            result = null;
             return true;
         }
 
-        if (from is null)
+        switch (conversionHint)
         {
-            result = null!;
-            return true;
-        }
-
-        if (from is string fromString)
-        {
-            if (string.IsNullOrEmpty(fromString))
-            {
-                result = null!;
-                return true;
-            }
-
-            var success = float.TryParse(fromString, out var outSingle);
-            if (success)
-            {
-                if (conversionHint is int singleHint)
+            case int decimalPlaces:
                 {
-                    result = Convert.ToSingle(Math.Round(outSingle, singleHint));
+                    result = from.Value.ToString($"F{decimalPlaces}");
                     return true;
                 }
 
-                result = outSingle;
+            case string format:
+                {
+                    result = from.Value.ToString(format);
+                    return true;
+                }
 
-                return true;
-            }
+            default:
+                {
+                    result = from.Value.ToString(System.Globalization.CultureInfo.CurrentCulture);
+                    return true;
+                }
         }
-
-        result = null!;
-        return false;
     }
 }

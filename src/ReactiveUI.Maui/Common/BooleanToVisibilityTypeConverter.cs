@@ -1,12 +1,14 @@
-﻿// Copyright (c) 2025 .NET Foundation and Contributors. All rights reserved.
+﻿// Copyright (c) 2009-2026 .NET Foundation and Contributors. All rights reserved.
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
 
 #if WINUI_TARGET
-using Microsoft.UI.Xaml;
+// Alias rather than import the namespace: the Maui-windows TFM also imports Microsoft.Maui implicitly, so a bare
+// Visibility would be ambiguous between Microsoft.UI.Xaml.Visibility and Microsoft.Maui.Visibility.
+using Visibility = Microsoft.UI.Xaml.Visibility;
 #else
-using Microsoft.Maui;
+using Visibility = Microsoft.Maui.Visibility;
 #endif
 
 #if IS_MAUI
@@ -16,56 +18,44 @@ namespace ReactiveUI;
 #endif
 
 /// <summary>
-/// This type convert converts between Boolean and XAML Visibility - the
-/// conversionHint is a BooleanToVisibilityHint.
+/// Converts <see cref="bool"/> to Visibility.
 /// </summary>
-public class BooleanToVisibilityTypeConverter : IBindingTypeConverter
+/// <remarks>
+/// <para>
+/// The conversion supports a <see cref="BooleanToVisibilityHint"/> as the conversion hint parameter:
+/// </para>
+/// <list type="bullet">
+/// <item><description><see cref="BooleanToVisibilityHint.None"/> - True maps to Visible, False maps to Collapsed.</description></item>
+/// <item><description><see cref="BooleanToVisibilityHint.Inverse"/> - Inverts the boolean before conversion (True → Collapsed, False → Visible).</description></item>
+/// <item><description><see cref="BooleanToVisibilityHint.UseHidden"/> - Use Hidden instead of Collapsed for false values (MAUI only, ignored on WinUI).</description></item>
+/// </list>
+/// <para>
+/// Hints can be combined using bitwise OR (e.g., <c>BooleanToVisibilityHint.Inverse | BooleanToVisibilityHint.UseHidden</c>).
+/// </para>
+/// </remarks>
+public sealed class BooleanToVisibilityTypeConverter : BindingTypeConverter<bool, Visibility>
 {
     /// <inheritdoc/>
-    public int GetAffinityForObjects(Type fromType, Type toType)
-    {
-        if (fromType == typeof(bool) && toType == typeof(Visibility))
-        {
-            return 10;
-        }
-
-        if (fromType == typeof(Visibility) && toType == typeof(bool))
-        {
-            return 10;
-        }
-
-        return 0;
-    }
+    public override int GetAffinityForObjects() => BindingAffinity.DefaultInternalTypeConverter;
 
     /// <inheritdoc/>
-    public bool TryConvert(object? from, Type toType, object? conversionHint, out object result)
+    public override bool TryConvert(bool from, object? conversionHint, out Visibility result)
     {
-        var hint = conversionHint is BooleanToVisibilityHint visibilityHint ?
-            visibilityHint :
-            BooleanToVisibilityHint.None;
+        var hint = conversionHint is BooleanToVisibilityHint visibilityHint
+            ? visibilityHint
+            : BooleanToVisibilityHint.None;
 
-        if (toType == typeof(Visibility) && from is bool fromBool)
-        {
-            var fromAsBool = (hint & BooleanToVisibilityHint.Inverse) != 0 ? !fromBool : fromBool;
+        var value = (hint & BooleanToVisibilityHint.Inverse) != 0 ? !from : from;
 
 #if !WINUI_TARGET
-            var notVisible = (hint & BooleanToVisibilityHint.UseHidden) != 0 ? Visibility.Hidden : Visibility.Collapsed;
+        var notVisible = (hint & BooleanToVisibilityHint.UseHidden) != 0
+            ? Visibility.Hidden
+            : Visibility.Collapsed;
 #else
-            const Visibility notVisible = Visibility.Collapsed;
+        const Visibility notVisible = Visibility.Collapsed;
 #endif
-            result = fromAsBool ? Visibility.Visible : notVisible;
-            return true;
-        }
 
-        if (from is Visibility fromAsVis)
-        {
-            result = fromAsVis == Visibility.Visible ^ (hint & BooleanToVisibilityHint.Inverse) == 0;
-        }
-        else
-        {
-            result = Visibility.Visible;
-        }
-
+        result = value ? Visibility.Visible : notVisible;
         return true;
     }
 }

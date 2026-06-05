@@ -1,0 +1,86 @@
+// Copyright (c) 2009-2026 .NET Foundation and Contributors. All rights reserved.
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+// See the LICENSE file in the project root for full license information.
+
+using System.Collections.ObjectModel;
+using System.Reactive;
+using System.Reactive.Concurrency;
+using System.Reactive.Linq;
+using DynamicData;
+using Splat;
+
+namespace ReactiveUI.Tests.Xaml.Mocks;
+
+/// <summary>
+/// A mock list view model used by binding tests.
+/// </summary>
+public sealed class MockBindListViewModel : ReactiveUI.ReactiveObject
+{
+    /// <summary>
+    /// Backing field for the <see cref="ActiveItem"/> property.
+    /// </summary>
+    private readonly ObservableAsPropertyHelper<MockBindListItemViewModel?> _activeItem;
+
+    /// <summary>
+    /// Backing field for the <see cref="ListItems"/> property.
+    /// </summary>
+    private readonly ReadOnlyObservableCollection<MockBindListItemViewModel> _listItems;
+
+    /// <summary>
+    /// Initializes static members of the <see cref="MockBindListViewModel"/> class.
+    /// </summary>
+    static MockBindListViewModel()
+    {
+        AppLocator.CurrentMutable.Register(static () => new MockBindListView(), typeof(IViewFor<MockBindListViewModel>));
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="MockBindListViewModel"/> class.
+    /// </summary>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage(
+        "Major Code Smell",
+        "S3366:\"this\" should not be exposed from constructors",
+        Justification = "OAPH/WhenAny initialization requires 'this'; single-threaded test fixture.")]
+    public MockBindListViewModel()
+    {
+        SelectItem = ReactiveCommand.Create(
+            (MockBindListItemViewModel item) =>
+                ActiveListItem.Edit(l =>
+                {
+                    var index = l.IndexOf(item);
+                    for (var i = l.Count - 1; i > index; i--)
+                    {
+                        l.RemoveAt(i);
+                    }
+                }));
+
+        ActiveListItem.Connect()
+            .Select(_ => ActiveListItem.Count > 0 ? ActiveListItem.Items[ActiveListItem.Count - 1] : null)
+            .ToProperty(this, vm => vm.ActiveItem, out _activeItem);
+
+        ActiveListItem.Connect().ObserveOn(ImmediateScheduler.Instance).Bind(out _listItems).Subscribe();
+    }
+
+    /// <summary>
+    /// Gets the item that is currently loaded in the list.
+    /// Add or remove elements to modify the list.
+    /// </summary>
+    public SourceList<MockBindListItemViewModel> ActiveListItem { get; } = new();
+
+    /// <summary>
+    /// Gets the deepest item of the currect list. (Last element of ActiveListItem).
+    /// </summary>
+    public MockBindListItemViewModel? ActiveItem => _activeItem.Value;
+
+    /// <summary>
+    /// Gets the items to be represented by the selected item which is passed as a parameter.
+    /// Only this item and its ancestors are kept, the rest of the items are removed.
+    /// </summary>
+    public ReactiveCommand<MockBindListItemViewModel, Unit> SelectItem { get; }
+
+    /// <summary>
+    /// Gets the list items.
+    /// </summary>
+    public ReadOnlyObservableCollection<MockBindListItemViewModel> ListItems => _listItems;
+}

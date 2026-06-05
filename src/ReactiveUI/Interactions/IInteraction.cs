@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2025 .NET Foundation and Contributors. All rights reserved.
+// Copyright (c) 2009-2026 .NET Foundation and Contributors. All rights reserved.
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
@@ -21,6 +21,31 @@ namespace ReactiveUI;
 /// then provides the interaction with an output as the answer to the question.
 /// </para>
 /// </remarks>
+/// <example>
+/// <code language="csharp">
+/// <![CDATA[
+/// public class ExportViewModel : ReactiveObject
+/// {
+///     public Interaction<ExportRequest, bool> ConfirmExport { get; } = new();
+///
+///     public Task<bool> TryExportAsync(ExportRequest request) => ConfirmExport.Handle(request).ToTask();
+/// }
+///
+/// public partial class ExportView : ReactiveUserControl<ExportViewModel>
+/// {
+///     public ExportView()
+///     {
+///         this.WhenActivated(disposables =>
+///             ViewModel!.ConfirmExport.RegisterHandler(async context =>
+///             {
+///                 var decision = await dialogService.ShowAsync(context.Input);
+///                 context.SetOutput(decision);
+///             }).DisposeWith(disposables));
+///     }
+/// }
+/// ]]>
+/// </code>
+/// </example>
 /// <typeparam name="TInput">
 /// The interaction's input type.
 /// </typeparam>

@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2025 .NET Foundation and Contributors. All rights reserved.
+// Copyright (c) 2009-2026 .NET Foundation and Contributors. All rights reserved.
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
@@ -12,13 +12,13 @@ namespace ReactiveUI.AndroidX;
 /// (i.e. you can call RaiseAndSetIfChanged).
 /// </summary>
 /// <typeparam name="TViewModel">The view model type.</typeparam>
-#if NET6_0_OR_GREATER
-[RequiresDynamicCode("ReactivePreferenceFragment uses methods that require dynamic code generation")]
-[RequiresUnreferencedCode("ReactivePreferenceFragment uses methods that may require unreferenced code")]
-#endif
-public abstract class ReactivePreferenceFragment<TViewModel> : ReactivePreferenceFragment, IViewFor<TViewModel>, ICanActivate
+public abstract class ReactivePreferenceFragment<TViewModel> : ReactivePreferenceFragment, IViewFor<TViewModel>,
+    ICanActivate
     where TViewModel : class
 {
+    /// <summary>
+    /// The backing field for the view model.
+    /// </summary>
     private TViewModel? _viewModel;
 
     /// <summary>
@@ -33,10 +33,6 @@ public abstract class ReactivePreferenceFragment<TViewModel> : ReactivePreferenc
     /// </summary>
     /// <param name="handle">The handle.</param>
     /// <param name="ownership">The ownership.</param>
-#if NET6_0_OR_GREATER
-    [RequiresDynamicCode("ReactivePreferenceFragment uses methods that require dynamic code generation")]
-    [RequiresUnreferencedCode("ReactivePreferenceFragment uses methods that may require unreferenced code")]
-#endif
     protected ReactivePreferenceFragment(in IntPtr handle, JniHandleOwnership ownership)
         : base(handle, ownership)
     {

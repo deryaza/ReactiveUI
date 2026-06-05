@@ -1,26 +1,43 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <!--
-    Added 19041 target as a workaround for System.Reactive targeting net5.0-windows10.0.19041.0
-    When 19041 is selected by the end user it causes the DispatcherScheduler in System.Reactive to be exposed and used.
-    -->
-    <TargetFrameworks>$(WindowsTargetFrameworks)</TargetFrameworks>
+    <TargetFrameworks>$(ReactiveUIWindowsOnlyTargets)</TargetFrameworks>
     <PackageDescription>Contains the ReactiveUI platform specific extensions for Windows Presentation Foundation (WPF)</PackageDescription>
     <PackageId>ReactiveUI.WPF</PackageId>
     <UseWpf>true</UseWpf>
     <PackageTags>mvvm;reactiveui;rx;reactive extensions;observable;LINQ;events;frp;wpf;net;netframework;netcore</PackageTags>
+    <IsAotCompatible>false</IsAotCompatible>
+    <EnableTrimAnalyzer>false</EnableTrimAnalyzer>
+    <EnableSingleFileAnalyzer>false</EnableSingleFileAnalyzer>
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\ReactiveUI\ReactiveUI.csproj" />
-    <PackageReference Include="System.Reactive" />
+    <ProjectReference Include="..\ReactiveUI\ReactiveUI.csproj"/>
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Remove="Rx\Internal\Constants.cs;Rx\**\Dispatcher*.cs;Rx\**\Control*.cs" />
+    <Compile Include="..\Shared\ArgumentExceptionHelper.cs" Link="Shared\ArgumentExceptionHelper.cs"/>
+    <Compile Include="..\Shared\ActionDisposable.cs" Link="Shared\ActionDisposable.cs"/>
+    <Compile Include="..\Shared\EmptyDisposable.cs" Link="Shared\EmptyDisposable.cs"/>
+    <Compile Include="..\Shared\DelegateObserver.cs" Link="Shared\DelegateObserver.cs"/>
+    <Compile Include="..\Shared\Broadcaster.cs" Link="Shared\Broadcaster.cs"/>
+    <Compile Include="..\Shared\BroadcastSubject.cs" Link="Shared\BroadcastSubject.cs"/>
+    <Compile Include="..\Shared\Platform\FromEventObservable.cs" Link="Shared\Platform\FromEventObservable.cs"/>
+    <Compile Include="..\Shared\Platform\MergedDistinctObservable.cs" Link="Shared\Platform\MergedDistinctObservable.cs"/>
+    <Compile Include="..\Shared\Platform\EmptyObservable.cs" Link="Shared\Platform\EmptyObservable.cs"/>
+    <Compile Include="..\Shared\Platform\NeverObservable.cs" Link="Shared\Platform\NeverObservable.cs"/>
+    <Compile Include="..\Shared\Platform\ReturnObservable.cs" Link="Shared\Platform\ReturnObservable.cs"/>
+    <Compile Include="..\Shared\Platform\StartWithObservable.cs" Link="Shared\Platform\StartWithObservable.cs"/>
+    <Compile Include="..\Shared\Platform\DoObservable.cs" Link="Shared\Platform\DoObservable.cs"/>
+    <Compile Include="..\Shared\Platform\DistinctUntilChangedObservable.cs" Link="Shared\Platform\DistinctUntilChangedObservable.cs"/>
+    <Compile Include="..\Shared\Platform\CombineLatestObservable.cs" Link="Shared\Platform\CombineLatestObservable.cs"/>
+    <Compile Include="..\Shared\Platform\ObserveOnObservable.cs" Link="Shared\Platform\ObserveOnObservable.cs"/>
+    <Compile Include="..\Shared\Platform\MergedObservable.cs" Link="Shared\Platform\MergedObservable.cs"/>
+    <Compile Include="..\Shared\Platform\IdleTimeoutObservable.cs" Link="Shared\Platform\IdleTimeoutObservable.cs"/>
+    <Compile Include="..\ReactiveUI\Polyfills\**\*.cs" Link="Polyfills\%(RecursiveDir)%(Filename)%(Extension)"/>
   </ItemGroup>
 
-  <ItemGroup Condition="$(TargetFramework) == 'net462' or $(TargetFramework.EndsWith('-windows10.0.17763.0'))">
-    <Compile Include="Rx\Internal\Constants.cs;Rx\**\Dispatcher*.cs" />
+  <ItemGroup>
+    <InternalsVisibleTo Include="ReactiveUI.NonParallel.Tests"/>
+    <InternalsVisibleTo Include="ReactiveUI.Wpf.Tests"/>
   </ItemGroup>
 </Project>

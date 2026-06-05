@@ -1,8 +1,11 @@
-﻿// Copyright (c) 2025 .NET Foundation and Contributors. All rights reserved.
+// Copyright (c) 2009-2026 .NET Foundation and Contributors. All rights reserved.
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
 
+using System.ComponentModel;
+using System.Reactive;
+using System.Reactive.Subjects;
 using AppKit;
 using Foundation;
 
@@ -12,13 +15,12 @@ namespace ReactiveUI;
 /// This is a NSWindowController that is both a NSWindowController and has ReactiveObject powers
 /// (i.e. you can call RaiseAndSetIfChanged).
 /// </summary>
-#if NET6_0_OR_GREATER
-[RequiresDynamicCode("ReactiveWindowController inherits from ReactiveObject which uses extension methods that require dynamic code generation")]
-[RequiresUnreferencedCode("ReactiveWindowController inherits from ReactiveObject which uses extension methods that may require unreferenced code")]
-#endif
 public class ReactiveWindowController : NSWindowController, IReactiveNotifyPropertyChanged<ReactiveWindowController>, IHandleObservableErrors, IReactiveObject, ICanActivate
 {
+    /// <summary>The subject used to signal window activation.</summary>
     private readonly Subject<Unit> _activated = new();
+
+    /// <summary>The subject used to signal window deactivation.</summary>
     private readonly Subject<Unit> _deactivated = new();
 
     /// <summary>
@@ -108,20 +110,24 @@ public class ReactiveWindowController : NSWindowController, IReactiveNotifyPrope
     void IReactiveObject.RaisePropertyChanging(PropertyChangingEventArgs args)
     {
         var handler = PropertyChanging;
-        if (handler is not null)
+        if (handler is null)
         {
-            handler(this, args);
+            return;
         }
+
+        handler(this, args);
     }
 
     /// <inheritdoc/>
     void IReactiveObject.RaisePropertyChanged(PropertyChangedEventArgs args)
     {
         var handler = PropertyChanged;
-        if (handler is not null)
+        if (handler is null)
         {
-            handler(this, args);
+            return;
         }
+
+        handler(this, args);
     }
 
     /// <summary>

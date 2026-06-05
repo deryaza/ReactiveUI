@@ -1,0 +1,28 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>$(ReactiveUITestingUITargets)</TargetFrameworks>
+    <OutputType>Exe</OutputType>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\ReactiveUI.Drawing\ReactiveUI.Drawing.csproj"/>
+    <ProjectReference Include="..\ReactiveUI.Test.Utilities\ReactiveUI.Test.Utilities.csproj"/>
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Remove="RandomTests.cs"/>
+    <Compile Remove="Platforms\**\*.cs"/>
+    <None Include="Platforms\**\*.cs"/>
+  </ItemGroup>
+  <ItemGroup Condition="$(TargetFramework.EndsWith('net8.0')) or $(TargetFramework.EndsWith('net9.0')) or $(TargetFramework.EndsWith('net8.0'))">
+    <Compile Include="Platforms\Blazor\**\*.cs"/>
+    <ProjectReference Include="..\..\ReactiveUI.Blazor\ReactiveUI.Blazor.csproj"/>
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Platforms\Drawing\**\*.cs"/>
+  </ItemGroup>
+
+</Project>

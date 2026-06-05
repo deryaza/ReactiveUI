@@ -1,0 +1,59 @@
+<!--
+ Copyright (c) 2025 .NET Foundation and Contributors. All rights reserved.
+ Licensed to the .NET Foundation under one or more agreements.
+ The .NET Foundation licenses this file to you under the MIT license.
+ See the LICENSE file in the project root for full license information.
+-->
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>$(ReactiveUITestingUITargets)</TargetFrameworks>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>ReactiveUI.Tests</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="DynamicData"/>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ReactiveUI.Test.Utilities\ReactiveUI.Test.Utilities.csproj"/>
+    <ProjectReference Include="..\ReactiveUI.TestGuiMocks\ReactiveUI.TestGuiMocks.csproj"/>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="**\*.cs"/>
+    <None Include="**\*.cs"/>
+    <Compile Include="API\**\*.cs"/>
+  </ItemGroup>
+  
+  <!-- UseWindowsForms adds implicit global usings for System.Windows.Forms and System.Drawing, which collide with the
+       WPF control/image types these tests use. Remove them so WPF names resolve unambiguously. -->
+  <ItemGroup>
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+  </ItemGroup>
+
+  <Choose>
+    <When Condition=" $(TargetFramework.EndsWith('-windows10.0.19041.0')) ">
+      <PropertyGroup>
+        <UseWpf>true</UseWpf>
+        <UseWindowsForms>true</UseWindowsForms>
+      </PropertyGroup>
+      <ItemGroup>
+        <ProjectReference Include="..\..\ReactiveUI.Wpf\ReactiveUI.Wpf.csproj"/>
+        <ProjectReference Include="..\..\ReactiveUI.Blend\ReactiveUI.Blend.csproj"/>
+        <Compile Include="Wpf\**\*.cs"/>
+        <Compile Include="Xaml\**\*.cs"/>
+        <Compile Include="WhenAny\**\*.cs"/>
+        <Compile Include="ReactiveObjects\**\*.cs"/>
+        <Compile Include="Utilities\**\*.cs"/>
+        <Compile Include="AssemblyHooks.cs"/>
+        <Compile Include="AssemblyInfo.Parallel.cs"/>
+        <Page Update="Wpf\Mocks\CanExecuteMock\CanExecuteExecutingView.xaml">
+          <XamlRuntime>$(DefaultXamlRuntime)</XamlRuntime>
+        </Page>
+      </ItemGroup>
+    </When>
+  </Choose>
+
+</Project>

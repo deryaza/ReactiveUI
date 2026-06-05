@@ -1,220 +1,281 @@
-﻿// Copyright (c) 2025 .NET Foundation and Contributors. All rights reserved.
+// Copyright (c) 2009-2026 .NET Foundation and Contributors. All rights reserved.
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
 
+using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
-using System.Reflection;
+using ReactiveUI.Helpers;
+using Splat;
 
 namespace ReactiveUI;
 
 /// <summary>
-/// DefaultViewLocator.
+/// Default AOT-compatible implementation of <see cref="IViewLocator"/> that resolves views using compile-time registrations.
 /// </summary>
-/// <seealso cref="ReactiveUI.IViewLocator" />
-public sealed partial class DefaultViewLocator : IViewLocator
+/// <remarks>
+/// <para>
+/// This locator uses explicit view-to-viewmodel mappings registered via <c>Map</c>.
+/// When no mapping is found, it falls back to querying the service locator for <c>IViewFor&lt;TViewModel&gt;</c>.
+/// </para>
+/// <para>
+/// This implementation is fully AOT-compatible and does not use reflection or runtime type discovery.
+/// All view-viewmodel associations must be registered at application startup.
+/// </para>
+/// </remarks>
+/// <example>
+/// <code language="csharp">
+/// <![CDATA[
+/// // Register views at startup
+/// var locator = new DefaultViewLocator();
+/// locator.Map<LoginViewModel, LoginView>(() => new LoginView())
+///        .Map<MainViewModel, MainView>(() => new MainView())
+///        .Map<SettingsViewModel, SettingsView>(() => new SettingsView());
+///
+/// // Resolve at runtime (fully AOT-compatible)
+/// var view = locator.ResolveView<LoginViewModel>();
+/// ]]>
+/// </code>
+/// </example>
+public sealed class DefaultViewLocator : IViewLocator
 {
-    internal DefaultViewLocator(Func<string, string>? viewModelToViewFunc = null) =>
-        ViewModelToViewFunc = viewModelToViewFunc ?? (vm => vm.Replace("ViewModel", "View"));
+    /// <summary>Lock object for synchronizing writes to _mappings.</summary>
+#if NET9_0_OR_GREATER
+    private readonly Lock _gate = new();
+#else
+    private readonly object _gate = new();
+#endif
 
     /// <summary>
-    /// Gets or sets the view model to view function.
+    /// Cache for MakeGenericType calls in ResolveView(object).
+    /// Key: ViewModelType, Value: IViewFor&lt;ViewModelType&gt; interface type.
     /// </summary>
-    /// <value>
-    /// The view model to view function.
-    /// </value>
-    public Func<string, string> ViewModelToViewFunc { get; set; }
+    private readonly ConcurrentDictionary<Type, Type> _viewForTypeCache = new();
 
     /// <summary>
-    /// Returns the view associated with a view model, deriving the name of the type via <see cref="ViewModelToViewFunc"/>, then discovering it via the
-    /// service locator.
+    /// Snapshot pattern: Readers access this volatile reference without locking.
+    /// Writers lock, clone, mutate, and swap the reference.
+    /// Keyed by (ViewModelType, Contract). Empty string represents default contract.
     /// </summary>
-    /// <typeparam name="T">The type.</typeparam>
+    private Dictionary<(Type ViewModelType, string Contract), Func<IViewFor>> _mappings = [];
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="DefaultViewLocator"/> class.
+    /// </summary>
+    internal DefaultViewLocator()
+    {
+    }
+
+    /// <summary>
+    /// Registers a direct mapping from a view model type to a view factory using the default contract.
+    /// </summary>
+    /// <typeparam name="TViewModel">View model type.</typeparam>
+    /// <typeparam name="TView">View type that implements IViewFor&lt;TViewModel&gt;.</typeparam>
+    /// <param name="factory">Factory function that creates the view instance.</param>
+    /// <returns>The locator for chaining.</returns>
+    [SuppressMessage(
+        "Major Code Smell",
+        "S4018:Generic methods should provide type parameter",
+        Justification = "Generic type parameter is supplied explicitly by the caller by design; it identifies the target type and cannot be inferred from the method's parameters.")]
+    public DefaultViewLocator Map<TViewModel, TView>(Func<TView> factory)
+        where TViewModel : class
+        where TView : class, IViewFor<TViewModel> =>
+        Map<TViewModel, TView>(factory, null);
+
+    /// <summary>
+    /// Registers a direct mapping from a view model type to a view factory.
+    /// This is the recommended way to register views for AOT-compatible applications.
+    /// </summary>
+    /// <typeparam name="TViewModel">View model type.</typeparam>
+    /// <typeparam name="TView">View type that implements IViewFor&lt;TViewModel&gt;.</typeparam>
+    /// <param name="factory">Factory function that creates the view instance.</param>
+    /// <param name="contract">Optional contract used to disambiguate multiple views for the same view model.</param>
+    /// <returns>The locator for chaining.</returns>
+    [SuppressMessage(
+        "Major Code Smell",
+        "S4018:Generic methods should provide type parameter",
+        Justification = "Generic type parameter is supplied explicitly by the caller by design; it identifies the target type and cannot be inferred from the method's parameters.")]
+    public DefaultViewLocator Map<TViewModel, TView>(Func<TView> factory, string? contract)
+        where TViewModel : class
+        where TView : class, IViewFor<TViewModel>
+    {
+        ArgumentExceptionHelper.ThrowIfNull(factory);
+
+        var key = (typeof(TViewModel), contract ?? string.Empty);
+
+        lock (_gate)
+        {
+            var current = Volatile.Read(ref _mappings);
+            Dictionary<(Type, string), Func<IViewFor>> newMappings = new(current)
+            {
+            [key] = factory
+            };
+
+            Interlocked.Exchange(ref _mappings, newMappings);
+        }
+
+        return this;
+    }
+
+    /// <summary>
+    /// Removes the default view mapping for the given view model type.
+    /// </summary>
+    /// <typeparam name="TViewModel">View model type to unmap.</typeparam>
+    /// <returns>The locator for chaining.</returns>
+    [SuppressMessage(
+        "Major Code Smell",
+        "S4018:Generic methods should provide type parameter",
+        Justification = "Generic type parameter is supplied explicitly by the caller by design; it identifies the target type and cannot be inferred from the method's parameters.")]
+    public DefaultViewLocator Unmap<TViewModel>()
+        where TViewModel : class =>
+        Unmap<TViewModel>(null);
+
+    /// <summary>
+    /// Removes a previously registered view mapping.
+    /// </summary>
+    /// <typeparam name="TViewModel">View model type to unmap.</typeparam>
+    /// <param name="contract">Optional contract to unmap. If null, removes the default mapping.</param>
+    /// <returns>The locator for chaining.</returns>
+    [SuppressMessage(
+        "Major Code Smell",
+        "S4018:Generic methods should provide type parameter",
+        Justification = "Generic type parameter is supplied explicitly by the caller by design; it identifies the target type and cannot be inferred from the method's parameters.")]
+    public DefaultViewLocator Unmap<TViewModel>(string? contract)
+        where TViewModel : class
+    {
+        var key = (typeof(TViewModel), contract ?? string.Empty);
+
+        lock (_gate)
+        {
+            var current = Volatile.Read(ref _mappings);
+            if (!current.ContainsKey(key))
+            {
+                return this;
+            }
+
+            Dictionary<(Type, string), Func<IViewFor>> newMappings = new(current);
+            newMappings.Remove(key);
+            Interlocked.Exchange(ref _mappings, newMappings);
+        }
+
+        return this;
+    }
+
+    /// <summary>
+    /// Resolves a view for a view model type using the default contract. Fully AOT-compatible.
+    /// </summary>
+    /// <typeparam name="TViewModel">The view model type to resolve a view for.</typeparam>
+    /// <returns>The resolved view or null when no registration is available.</returns>
+    [SuppressMessage(
+        "Major Code Smell",
+        "S4018:Generic methods should provide type parameter",
+        Justification = "Generic type parameter is supplied explicitly by the caller by design; it identifies the target type and cannot be inferred from the method's parameters.")]
+    public IViewFor<TViewModel>? ResolveView<TViewModel>()
+        where TViewModel : class =>
+        ResolveView<TViewModel>(null);
+
+    /// <summary>
+    /// Resolves a view for a view model type known at compile time. Fully AOT-compatible.
+    /// </summary>
+    /// <typeparam name="TViewModel">The view model type to resolve a view for.</typeparam>
+    /// <param name="contract">Optional contract to disambiguate between multiple views for the same view model.</param>
+    /// <returns>The resolved view or null when no registration is available.</returns>
     /// <remarks>
     /// <para>
-    /// Given view model type <c>T</c> with runtime type <c>RT</c>, this implementation will attempt to resolve the following views:
+    /// Resolution strategy:
     /// <list type="number">
-    /// <item>
-    /// <description>
-    /// Look for a service registered under the type whose name is given to us by passing <c>RT</c> to <see cref="ViewModelToViewFunc"/> (which defaults to changing "ViewModel" to "View").
-    /// </description>
-    /// </item>
-    /// <item>
-    /// <description>
-    /// Look for a service registered under the type <c>IViewFor&lt;RT&gt;</c>.
-    /// </description>
-    /// </item>
-    /// <item>
-    /// <description>
-    /// Look for a service registered under the type whose name is given to us by passing <c>T</c> to <see cref="ViewModelToViewFunc"/> (which defaults to changing "ViewModel" to "View").
-    /// </description>
-    /// </item>
-    /// <item>
-    /// <description>
-    /// Look for a service registered under the type <c>IViewFor&lt;T&gt;</c>.
-    /// </description>
-    /// </item>
-    /// <item>
-    /// <description>
-    /// If <c>T</c> is an interface, change its name to that of a class (i.e. drop the leading "I"). If it's a class, change to an interface (i.e. add a leading "I").
-    /// </description>
-    /// </item>
-    /// <item>
-    /// <description>
-    /// Repeat steps 1-4 with the type resolved from the modified name.
-    /// </description>
-    /// </item>
+    /// <item>Check for explicit mapping registered via <c>Map</c> with the specified contract.</item>
+    /// <item>Query the service locator for <c>IViewFor&lt;TViewModel&gt;</c> with the specified contract.</item>
     /// </list>
     /// </para>
     /// </remarks>
-    /// <param name="viewModel">
-    /// The view model whose associated view is to be resolved.
-    /// </param>
-    /// <param name="contract">
-    /// Optional contract to be used when resolving from Splat.
-    /// </param>
-    /// <returns>
-    /// The view associated with the given view model.
-    /// </returns>
-#if NET6_0_OR_GREATER
-    [RequiresDynamicCode("View resolution uses reflection and type discovery")]
-    [RequiresUnreferencedCode("View resolution may reference types that could be trimmed")]
-#endif
-    public IViewFor? ResolveView<T>(T? viewModel, string? contract = null)
+    [SuppressMessage(
+        "Major Code Smell",
+        "S4018:Generic methods should provide type parameter",
+        Justification = "Generic type parameter is supplied explicitly by the caller by design; it identifies the target type and cannot be inferred from the method's parameters.")]
+    public IViewFor<TViewModel>? ResolveView<TViewModel>(string? contract)
+        where TViewModel : class
     {
-        viewModel.ArgumentNullExceptionThrowIfNull(nameof(viewModel));
-
-        var mapped = TryResolveAOTMapping(viewModel!.GetType(), contract);
-        if (mapped is not null)
+    var mappings = Volatile.Read(ref _mappings);
+    var vmType = typeof(TViewModel);
+    var contractKey = contract ?? string.Empty;
+    if (mappings.TryGetValue((vmType, contractKey), out var factory))
         {
-            return mapped;
+            this.Log().Debug(
+                CultureInfo.InvariantCulture,
+                "Resolved IViewFor<{0}> from explicit mapping",
+                typeof(TViewModel).Name);
+            return (IViewFor<TViewModel>)factory();
         }
 
-        var view = AttemptViewResolutionFor(viewModel!.GetType(), contract)
-                   ?? AttemptViewResolutionFor(typeof(T), contract)
-                   ?? AttemptViewResolutionFor(ToggleViewModelType(viewModel.GetType()), contract)
-                   ?? AttemptViewResolutionFor(ToggleViewModelType(typeof(T)), contract);
-
-        if (view is not null)
+    var view = AppLocator.Current?.GetService<IViewFor<TViewModel>>(contract);
+    if (view is not null)
         {
+            this.Log().Debug(
+                CultureInfo.InvariantCulture,
+                "Resolved IViewFor<{0}> via service locator",
+                typeof(TViewModel).Name);
             return view;
         }
 
-        this.Log().Warn(CultureInfo.InvariantCulture, "Failed to resolve view for view model type '{0}'.", typeof(T).FullName);
-        return null;
+    this.Log().Warn(
+            CultureInfo.InvariantCulture,
+            "Failed to resolve view for {0}. Use Map<TViewModel, TView>() or register IViewFor<TViewModel> in the service locator.",
+            typeof(TViewModel).Name);
+    return null;
     }
 
-#if NET6_0_OR_GREATER
-    [RequiresDynamicCode("Type resolution requires dynamic code generation")]
-    [RequiresUnreferencedCode("Type resolution may reference types that could be trimmed")]
-#endif
-    private static Type? ToggleViewModelType(Type viewModelType)
-    {
-        var viewModelTypeName = viewModelType.AssemblyQualifiedName;
+    /// <summary>
+    /// Resolves a view for a view model instance using runtime type information and the default contract.
+    /// </summary>
+    /// <param name="instance">The view model instance to resolve a view for.</param>
+    /// <returns>The resolved view or null when no registration is available.</returns>
+    [RequiresUnreferencedCode(
+        "This method uses reflection to determine the view model type at runtime, which may be incompatible with trimming.")]
+    [RequiresDynamicCode(
+        "If some of the generic arguments are annotated (either with DynamicallyAccessedMembersAttribute, " +
+        "or generic constraints), trimming can't validate that the requirements of those annotations are met.")]
+    public IViewFor? ResolveView(object? instance) =>
+        ResolveView(instance, null);
 
-        if (viewModelTypeName is null)
+    /// <inheritdoc/>
+    [RequiresUnreferencedCode(
+        "This method uses reflection to determine the view model type at runtime, which may be incompatible with trimming.")]
+    [RequiresDynamicCode(
+        "If some of the generic arguments are annotated (either with DynamicallyAccessedMembersAttribute, " +
+        "or generic constraints), trimming can't validate that the requirements of those annotations are met.")]
+    public IViewFor? ResolveView(object? instance, string? contract)
+    {
+        if (instance is null)
         {
             return null;
         }
 
-        if (viewModelType.GetTypeInfo().IsInterface)
+        var vmType = instance.GetType();
+        var contractKey = contract ?? string.Empty;
+        var mappings = Volatile.Read(ref _mappings);
+        if (mappings.TryGetValue((vmType, contractKey), out var factory))
         {
-#if NET6_0_OR_GREATER
-            if (viewModelType.Name.StartsWith('I'))
-#else
-            if (viewModelType.Name.StartsWith("I", StringComparison.InvariantCulture))
-#endif
-            {
-                var toggledTypeName = DeinterfaceifyTypeName(viewModelTypeName);
-                return Reflection.ReallyFindType(toggledTypeName, throwOnFailure: false);
-            }
-        }
-        else
-        {
-            var toggledTypeName = InterfaceifyTypeName(viewModelTypeName);
-            return Reflection.ReallyFindType(toggledTypeName, throwOnFailure: false);
-        }
-
-        return null;
-    }
-
-    private static string DeinterfaceifyTypeName(string typeName)
-    {
-        var idxComma = typeName.IndexOf(',', 0);
-        var idxPeriod = typeName.LastIndexOf('.', idxComma - 1);
-#if NET6_0_OR_GREATER
-        return string.Concat(typeName.AsSpan(0, idxPeriod + 1), typeName.AsSpan(idxPeriod + 2));
-#else
-        return typeName.Substring(0, idxPeriod + 1) + typeName.Substring(idxPeriod + 2);
-#endif
-    }
-
-    private static string InterfaceifyTypeName(string typeName)
-    {
-        var idxComma = typeName.IndexOf(',', 0);
-        var idxPeriod = typeName.LastIndexOf('.', idxComma - 1);
-        return typeName.Insert(idxPeriod + 1, "I");
-    }
-
-#if NET6_0_OR_GREATER
-    [RequiresDynamicCode("View resolution uses reflection and type discovery")]
-    [RequiresUnreferencedCode("View resolution may reference types that could be trimmed")]
-#endif
-    private IViewFor? AttemptViewResolutionFor(Type? viewModelType, string? contract)
-    {
-        if (viewModelType is null)
-        {
-            return null;
-        }
-
-        var viewModelTypeName = viewModelType.AssemblyQualifiedName;
-
-        if (viewModelTypeName is null)
-        {
-            return null;
-        }
-
-        var proposedViewTypeName = ViewModelToViewFunc(viewModelTypeName);
-        var view = AttemptViewResolution(proposedViewTypeName, contract);
-
-        if (view is not null)
-        {
-            return view;
-        }
-
-        proposedViewTypeName = typeof(IViewFor<>).MakeGenericType(viewModelType).AssemblyQualifiedName;
-        return AttemptViewResolution(proposedViewTypeName, contract);
-    }
-
-#if NET6_0_OR_GREATER
-    [RequiresDynamicCode("View resolution uses reflection and type discovery")]
-    [RequiresUnreferencedCode("View resolution may reference types that could be trimmed")]
-#endif
-    private IViewFor? AttemptViewResolution(string? viewTypeName, string? contract)
-    {
-        try
-        {
-            var viewType = Reflection.ReallyFindType(viewTypeName, throwOnFailure: false);
-            if (viewType is null)
+            var view = factory();
+            if (view is not { } viewFor)
             {
                 return null;
             }
 
-            var service = Locator.Current.GetService(viewType, contract);
-
-            if (service is not IViewFor view)
-            {
-                return null;
-            }
-
-            this.Log().Debug(CultureInfo.InvariantCulture, "Resolved service type '{0}'", viewType.FullName);
-
-            return view;
+            viewFor.ViewModel = instance;
+            return viewFor;
         }
-        catch (Exception ex)
+
+        var serviceType = _viewForTypeCache.GetOrAdd(vmType, static t => typeof(IViewFor<>).MakeGenericType(t));
+
+        var resolved = AppLocator.Current.GetService(serviceType, contract);
+        if (resolved is not IViewFor resolvedViewFor)
         {
-            this.Log().Error(ex, $"Exception occurred whilst attempting to resolve type {viewTypeName} into a view.");
-            throw;
+            return null;
         }
+
+        resolvedViewFor.ViewModel = instance;
+        return resolvedViewFor;
     }
 }

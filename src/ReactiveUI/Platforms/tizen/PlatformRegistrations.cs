@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2023 .NET Foundation and Contributors. All rights reserved.
+// Copyright (c) 2023 .NET Foundation and Contributors. All rights reserved.
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
@@ -12,21 +12,17 @@ namespace ReactiveUI;
 public class PlatformRegistrations : IWantsToRegisterStuff
 {
     /// <inheritdoc/>
-#if NET6_0_OR_GREATER
-    [RequiresDynamicCode("Platform registration uses ComponentModelTypeConverter and RxApp which require dynamic code generation")]
-    [RequiresUnreferencedCode("Platform registration uses ComponentModelTypeConverter and RxApp which may require unreferenced code")]
-#endif
-    public void Register(Action<Func<object>, Type> registerFunction)
+    public void Register(IRegistrar registrar)
     {
-        registerFunction.ArgumentNullExceptionThrowIfNull(nameof(registerFunction));
+        ArgumentExceptionHelper.ThrowIfNull(registrar);
 
-        registerFunction(() => new PlatformOperations(), typeof(IPlatformOperations));
-        registerFunction(() => new ComponentModelTypeConverter(), typeof(IBindingTypeConverter));
+        registrar.RegisterConstant<IPlatformOperations>(static () => new PlatformOperations());
+        registrar.RegisterConstant<IBindingFallbackConverter>(static () => new ComponentModelFallbackConverter());
 
         if (!ModeDetector.InUnitTestRunner())
         {
-            RxApp.TaskpoolScheduler = TaskPoolScheduler.Default;
-            RxApp.MainThreadScheduler = EcoreMainloopScheduler.MainThreadScheduler;
+            RxSchedulers.TaskpoolScheduler = TaskPoolScheduler.Default;
+            RxSchedulers.MainThreadScheduler = EcoreMainloopScheduler.MainThreadScheduler;
         }
     }
 }

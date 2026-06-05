@@ -1,12 +1,15 @@
-﻿// Copyright (c) 2025 .NET Foundation and Contributors. All rights reserved.
+// Copyright (c) 2009-2026 .NET Foundation and Contributors. All rights reserved.
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
 
+using System.ComponentModel;
+using System.Diagnostics.CodeAnalysis;
+using System.Reactive;
+using System.Reactive.Concurrency;
+using System.Reactive.Subjects;
 using CoreGraphics;
-
 using Foundation;
-
 using UIKit;
 
 namespace ReactiveUI;
@@ -16,13 +19,12 @@ namespace ReactiveUI;
 /// (i.e. you can call RaiseAndSetIfChanged).
 /// </summary>
 [SuppressMessage("Design", "CA1010: Implement generic IEnumerable", Justification = "UI Kit exposes IEnumerable")]
-#if NET6_0_OR_GREATER
-[RequiresDynamicCode("ReactiveTableView inherits from ReactiveObject which uses extension methods that require dynamic code generation")]
-[RequiresUnreferencedCode("ReactiveTableView inherits from ReactiveObject which uses extension methods that may require unreferenced code")]
-#endif
 public abstract class ReactiveTableView : UITableView, IReactiveNotifyPropertyChanged<ReactiveTableView>, IHandleObservableErrors, IReactiveObject, ICanActivate, ICanForceManualActivation
 {
+    /// <summary>The subject used to signal view activation.</summary>
     private readonly Subject<Unit> _activated = new();
+
+    /// <summary>The subject used to signal view deactivation.</summary>
     private readonly Subject<Unit> _deactivated = new();
 
     /// <summary>
@@ -94,10 +96,10 @@ public abstract class ReactiveTableView : UITableView, IReactiveNotifyPropertyCh
     public IObservable<Exception> ThrownExceptions => this.GetThrownExceptionsObservable();
 
     /// <inheritdoc/>
-    public IObservable<Unit> Activated => _activated.AsObservable();
+    public IObservable<Unit> Activated => _activated;
 
     /// <inheritdoc/>
-    public IObservable<Unit> Deactivated => _deactivated.AsObservable();
+    public IObservable<Unit> Deactivated => _deactivated;
 
     /// <inheritdoc/>
     void IReactiveObject.RaisePropertyChanging(PropertyChangingEventArgs args) => PropertyChanging?.Invoke(this, args);
@@ -116,9 +118,9 @@ public abstract class ReactiveTableView : UITableView, IReactiveNotifyPropertyCh
     }
 
     /// <inheritdoc/>
-    void ICanForceManualActivation.Activate(bool activate) =>
-        RxApp.MainThreadScheduler.Schedule(() =>
-                                               (activate ? _activated : _deactivated).OnNext(Unit.Default));
+    void ICanForceManualActivation.Activate(bool shouldActivate) =>
+        RxSchedulers.MainThreadScheduler.Schedule(() =>
+                                               (shouldActivate ? _activated : _deactivated).OnNext(Unit.Default));
 
     /// <inheritdoc/>
     protected override void Dispose(bool disposing)
@@ -140,13 +142,10 @@ public abstract class ReactiveTableView : UITableView, IReactiveNotifyPropertyCh
 /// <typeparam name="TViewModel">The view model type.</typeparam>
 [SuppressMessage("StyleCop.CSharp.MaintainabilityRules", "SA1402:FileMayOnlyContainASingleType", Justification = "Classes with the same class names within.")]
 [SuppressMessage("Design", "CA1010: Implement generic IEnumerable", Justification = "UI Kit exposes IEnumerable")]
-#if NET6_0_OR_GREATER
-[RequiresDynamicCode("ReactiveTableView<TViewModel> inherits from ReactiveObject which uses extension methods that require dynamic code generation")]
-[RequiresUnreferencedCode("ReactiveTableView<TViewModel> inherits from ReactiveObject which uses extension methods that may require unreferenced code")]
-#endif
 public abstract class ReactiveTableView<TViewModel> : ReactiveTableView, IViewFor<TViewModel>
     where TViewModel : class
 {
+    /// <summary>The backing store for the <see cref="ViewModel"/> property.</summary>
     private TViewModel? _viewModel;
 
     /// <summary>

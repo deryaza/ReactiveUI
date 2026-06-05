@@ -1,7 +1,12 @@
-﻿// Copyright (c) 2025 .NET Foundation and Contributors. All rights reserved.
+﻿// Copyright (c) 2009-2026 .NET Foundation and Contributors. All rights reserved.
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
+
+#if !NET8_0_OR_GREATER
+using System.Runtime.Serialization;
+using ReactiveUI.Helpers;
+#endif
 
 namespace ReactiveUI;
 
@@ -19,16 +24,17 @@ namespace ReactiveUI;
 #endif
 public class UnhandledInteractionException<TInput, TOutput> : Exception
 {
+    /// <summary>The interaction instance that was not handled.</summary>
     [field: NonSerialized]
     private readonly Interaction<TInput, TOutput>? _interaction;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="UnhandledInteractionException{TInput, TOutput}"/> class.
     /// </summary>
-    /// <param name="interaction">The interaction that doesn't have a input handler.</param>
+    /// <param name="interaction">The interaction that doesn't have an input handler.</param>
     /// <param name="input">The input into the interaction.</param>
     public UnhandledInteractionException(Interaction<TInput, TOutput> interaction, TInput input)
-        : this("Failed to find a registration for a Interaction.")
+        : this("Failed to find a registration for an Interaction.")
     {
         _interaction = interaction;
         Input = input;
@@ -89,7 +95,7 @@ public class UnhandledInteractionException<TInput, TOutput> : Exception
     /// <inheritdoc/>
     public override void GetObjectData(SerializationInfo info, StreamingContext context)
     {
-        info.ArgumentNullExceptionThrowIfNull(nameof(info));
+        ArgumentExceptionHelper.ThrowIfNull(info);
 
         info.AddValue(nameof(Input), Input);
         base.GetObjectData(info, context);

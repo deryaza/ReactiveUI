@@ -1,0 +1,181 @@
+<Project>
+  <PropertyGroup>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <Platform>AnyCPU</Platform>
+    <DebugType>embedded</DebugType>
+    <Authors>.NET Foundation and Contributors</Authors>
+    <Copyright>Copyright (c) .NET Foundation and Contributors</Copyright>
+    <PackageIcon>logo.png</PackageIcon>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://reactiveui.net</PackageProjectUrl>
+    <DefaultPackageDescription>A MVVM framework that integrates with the Reactive Extensions for .NET to create elegant, testable User Interfaces that run on any mobile or desktop platform. Supports Xamarin.iOS, Xamarin.Android, Xamarin.Mac, Xamarin Forms, Xamarin.TVOS, Tizen, WPF, Windows Forms, Universal Windows Platform (UWP) and the Uno Platform.</DefaultPackageDescription>
+    <PackageDescription>$(DefaultPackageDescription)</PackageDescription>
+    <Owners>anaisbetts;ghuntley</Owners>
+    <PackageTags>mvvm;reactiveui;rx;reactive extensions;observable;LINQ;events;frp;xamarin;android;ios;mac;forms;monodroid;monotouch;xamarin.android;xamarin.ios;xamarin.forms;xamarin.mac;xamarin.tvos;wpf;net;netstandard;net462;winui;maui;tizen;unoplatform</PackageTags>
+    <PackageReleaseNotes>https://github.com/reactiveui/ReactiveUI/releases</PackageReleaseNotes>
+    <RepositoryUrl>https://github.com/reactiveui/reactiveui</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <ImplicitUsings>enable</ImplicitUsings>
+    
+    <!-- Publish the repository URL in the built .nupkg (in the NuSpec <Repository> element) -->
+
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <!-- Embed source files that are not tracked by the source control manager in the PDB -->
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+
+    <!-- Include PDB in the built .nupkg -->
+    <AllowedOutputExtensionsInPackageBuildOutputFolder>$(AllowedOutputExtensionsInPackageBuildOutputFolder);.pdb</AllowedOutputExtensionsInPackageBuildOutputFolder>
+    <Nullable>enable</Nullable>
+
+    <LangVersion>latest</LangVersion>
+
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+
+    <WarningsAsErrors>nullable;CS4014</WarningsAsErrors>
+
+    <!-- NETSDK1202: net*-android EOL-support notice. Suppressed for now while the Android TFMs are migrated. -->
+    <NoWarn>$(NoWarn);NETSDK1202</NoWarn>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <IncludePackageReferencesDuringMarkupCompilation>true</IncludePackageReferencesDuringMarkupCompilation>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+
+    <!-- Enable building Windows-specific targets on non-Windows platforms -->
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <IsTestProject>$(MSBuildProjectName.EndsWith('.Tests'))</IsTestProject>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(IsTestProject)' == 'true'">
+    <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
+    <TUnitImplicitUsings>true</TUnitImplicitUsings>
+    <TUnitAssertionsImplicitUsings>true</TUnitAssertionsImplicitUsings>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <!-- Granular Target Framework definitions for cross-platform builds -->
+    <ReactiveUICoreTargets>net8.0;net9.0;net10.0</ReactiveUICoreTargets>
+
+    <!-- Platform-specific targets - always defined but only used on supported platforms -->
+    <ReactiveUIFrameworkTargets>net462;net472;net481</ReactiveUIFrameworkTargets>
+    <ReactiveUIMauiWindowsTargets>net9.0-windows10.0.19041.0;net10.0-windows10.0.19041.0</ReactiveUIMauiWindowsTargets>
+    <ReactiveUIWindowsTargets>net8.0-windows10.0.19041.0;net9.0-windows10.0.19041.0;net10.0-windows10.0.19041.0</ReactiveUIWindowsTargets>
+    <ReactiveUIWinUITargets>net8.0-windows10.0.19041.0;net9.0-windows10.0.19041.0;net10.0-windows10.0.19041.0</ReactiveUIWinUITargets>
+    <!-- net9 mobile (iOS/tvOS/macOS/maccatalyst) support ended 12 May 2026; target net10 only. -->
+    <ReactiveUIAppleTargets>net10.0-ios;net10.0-tvos;net10.0-macos;net10.0-maccatalyst</ReactiveUIAppleTargets>
+    <!-- The Xamarin.AndroidX.* packages dropped support for the default (low) Android platform version and now
+         require net9.0-android35.0 / net10.0-android36.0. Only the net10 Android pack is available on the current
+         SDK band, and net9.0-android clamps to API 21 (no net9 pack), so Android targets net10 only here. -->
+    <ReactiveUIAndroidTargets>net10.0-android</ReactiveUIAndroidTargets>
+
+    <!-- Windows-only targets (combines Framework + Windows targets) - conditioned -->
+    <ReactiveUIWindowsOnlyTargets>$(ReactiveUIWindowsTargets)</ReactiveUIWindowsOnlyTargets>
+    <ReactiveUIWindowsOnlyTargets>$(ReactiveUIFrameworkTargets);$(ReactiveUIWindowsTargets)</ReactiveUIWindowsOnlyTargets>
+
+    <ReactiveUITestTargets>net8.0;net9.0;net10.0</ReactiveUITestTargets>
+    <ReactiveUITestTargets>net8.0-windows10.0.19041.0;net9.0-windows10.0.19041.0;net10.0-windows10.0.19041.0</ReactiveUITestTargets>
+
+    <!--    <ReactiveUIMauiTestTargets Condition="$([MSBuild]::IsOsPlatform('Windows'))">$(ReactiveUIMauiWindowsTargets)</ReactiveUIMauiTestTargets>-->
+    <ReactiveUIMauiTestTargets>$(ReactiveUIMauiTestTargets);net9.0;net10.0</ReactiveUIMauiTestTargets>
+
+    <ReactiveMauiTargets>$(ReactiveUIMauiWindowsTargets)</ReactiveMauiTargets>
+    <ReactiveMauiTargets>$(ReactiveMauiTargets);net9.0;net10.0;$(ReactiveUIAndroidTargets)</ReactiveMauiTargets>
+    <ReactiveMauiTargets Condition="$([MSBuild]::IsOsPlatform('Windows')) or $([MSBuild]::IsOsPlatform('OSX'))">$(ReactiveMauiTargets);$(ReactiveUIAppleTargets)</ReactiveMauiTargets>
+
+    <!-- Modern targets for tests and benchmarks (no netstandard) -->
+    <ReactiveUIModernTargets>net8.0;net9.0;net10.0</ReactiveUIModernTargets>
+
+    <!-- Testing target frameworks for non-platform tests (core .NET + .NET Framework) -->
+    <ReactiveUITestingTargets>net8.0;net9.0;net10.0</ReactiveUITestingTargets>
+
+    <!-- Testing target frameworks for UI platform tests. Windows-specific TFMs only on Windows: off-Windows
+         these test projects fall back to the plain net TFMs so they run on the Linux/macOS CI legs (their
+         Windows-only project references are gated behind a -windows10.0.19041.0 <When> condition). Building them
+         as net*-windows off-Windows would produce assemblies the runner cannot launch (no Microsoft.WindowsDesktop.App). -->
+    <ReactiveUITestingUITargets>$(ReactiveUITestingTargets)</ReactiveUITestingUITargets>
+    <ReactiveUITestingUITargets Condition="$([MSBuild]::IsOsPlatform('Windows'))">net8.0-windows10.0.19041.0;net9.0-windows10.0.19041.0;net10.0-windows10.0.19041.0</ReactiveUITestingUITargets>
+
+    <!-- Start with core targets available on all platforms -->
+    <ReactiveUIFinalTargetFrameworks>$(ReactiveUICoreTargets)</ReactiveUIFinalTargetFrameworks>
+
+    <!-- Add Android targets (available on all platforms with Android SDK) -->
+    <ReactiveUIFinalTargetFrameworks>$(ReactiveUIFinalTargetFrameworks);$(ReactiveUIAndroidTargets)</ReactiveUIFinalTargetFrameworks>
+
+    <!-- Add Windows-specific targets (.NET Framework and Windows-specific TFMs) on Windows, or anywhere EnableWindowsTargeting is set (reference-only compile on Linux/macOS). -->
+    <ReactiveUIFinalTargetFrameworks>$(ReactiveUIFinalTargetFrameworks);$(ReactiveUIFrameworkTargets);$(ReactiveUIWindowsTargets)</ReactiveUIFinalTargetFrameworks>
+
+    <!-- Add Apple targets on macOS and Windows -->
+    <ReactiveUIFinalTargetFrameworks Condition="$([MSBuild]::IsOsPlatform('Windows')) or $([MSBuild]::IsOsPlatform('OSX'))">$(ReactiveUIFinalTargetFrameworks);$(ReactiveUIAppleTargets)</ReactiveUIFinalTargetFrameworks>
+
+    <!-- Final target frameworks for tests/benchmarks (modern .NET only, with platform-specific additions) -->
+    <ReactiveUIFinalModernTargetFrameworks>$(ReactiveUIModernTargets)</ReactiveUIFinalModernTargetFrameworks>
+    <ReactiveUIFinalModernTargetFrameworks Condition="$([MSBuild]::IsOsPlatform('Windows'))">$(ReactiveUIFinalModernTargetFrameworks);$(ReactiveUIFrameworkTargets);$(ReactiveUIWindowsTargets)</ReactiveUIFinalModernTargetFrameworks>
+  </PropertyGroup>
+
+  <!-- MTP Native JSON Configuration -->
+  <ItemGroup Condition="'$(IsTestProject)' == 'true'">
+    <None Include="$(MSBuildThisFileDirectory)testconfig.json">
+      <Link>$(AssemblyName).testconfig.json</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <!-- AOT Compatibility Settings for non-test, non-WPF projects on modern .NET -->
+  <PropertyGroup Condition="$(MSBuildProjectName.Contains('WPF')) != 'true' and '$(IsTestProject)' != 'true' and ($(TargetFramework.StartsWith('net8.0')) or $(TargetFramework.StartsWith('net9.0')) or $(TargetFramework.StartsWith('net10.0')))">
+    <!-- Mark this library as AOT-compatible -->
+    <IsAotCompatible>true</IsAotCompatible>
+
+    <!-- Enable trim analyzers to verify library is trim-safe -->
+    <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+    <EnableSingleFileAnalyzer>true</EnableSingleFileAnalyzer>
+
+    <!-- Treat trimming warnings as errors during build -->
+    <ILLinkTreatWarningsAsErrors>true</ILLinkTreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(GITHUB_ACTIONS)' == 'true'">
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+  </PropertyGroup>
+
+  <ItemGroup Condition="$(IsTestProject)">
+    <PackageReference Include="TUnit"/>
+    <PackageReference Include="Microsoft.NET.Test.Sdk"/>
+    <PackageReference Include="Microsoft.Testing.Extensions.CodeCoverage"/>
+    <PackageReference Include="PublicApiGenerator"/>
+    <PackageReference Include="Verify.TUnit"/>
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(IsTestProject)' != 'true'">
+    <PackageReference Include="Microsoft.SourceLink.GitHub" PrivateAssets="All"/>
+  </ItemGroup>
+  <PropertyGroup>
+    <SolutionDir Condition="'$(SolutionDir)' == ''">$(MSBuildThisFileDirectory)</SolutionDir>
+  </PropertyGroup>
+  <ItemGroup>
+    <None Include="$(MSBuildThisFileDirectory)..\images\logo.png" Pack="true" PackagePath="\"/>
+    <None Include="$(MSBuildThisFileDirectory)..\LICENSE" Pack="true" PackagePath="LICENSE"/>
+    <None Include="$(MSBuildThisFileDirectory)..\README.md" Pack="true" PackagePath="\"/>
+  </ItemGroup>
+  <!-- MinVer (versioning) — replaces Nerdbank.GitVersioning. ReactiveUI release tags are unprefixed
+       (e.g. 23.2.1), so no tag prefix is configured. Floor at the current 23.2 baseline so untagged
+       builds produce 23.2.x-alpha.0.<height> until a 23.2.0 (or later) tag is cut. -->
+  <PropertyGroup>
+    <MinVerAutoIncrement>minor</MinVerAutoIncrement>
+    <MinVerDefaultPreReleaseIdentifiers>alpha.0</MinVerDefaultPreReleaseIdentifiers>
+    <MinVerMinimumMajorMinor>23.2</MinVerMinimumMajorMinor>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MinVer" PrivateAssets="all"/>
+    <PackageReference Include="stylecop.analyzers" PrivateAssets="all"/>
+    <PackageReference Include="Roslynator.Analyzers" PrivateAssets="All"/>
+    <PackageReference Include="Blazor.Common.Analyzers" PrivateAssets="All"/>
+    <PackageReference Include="SonarAnalyzer.CSharp" PrivateAssets="all"/>
+  </ItemGroup>
+  <ItemGroup>
+    <AdditionalFiles Include="$(MSBuildThisFileDirectory)stylecop.json" Link="stylecop.json"/>
+  </ItemGroup>
+</Project>

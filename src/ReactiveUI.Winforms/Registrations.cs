@@ -1,7 +1,10 @@
-// Copyright (c) 2025 .NET Foundation and Contributors. All rights reserved.
+// Copyright (c) 2009-2026 .NET Foundation and Contributors. All rights reserved.
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
+
+using ReactiveUI.Helpers;
+using Splat;
 
 namespace ReactiveUI.Winforms;
 
@@ -12,40 +15,29 @@ namespace ReactiveUI.Winforms;
 public class Registrations : IWantsToRegisterStuff
 {
     /// <inheritdoc/>
-#if NET6_0_OR_GREATER
-    [RequiresDynamicCode("Register uses methods that require dynamic code generation")]
-    [RequiresUnreferencedCode("Register uses methods that may require unreferenced code")]
-    [SuppressMessage("Trimming", "IL2046:'RequiresUnreferencedCodeAttribute' annotations must match across all interface implementations or overrides.", Justification = "Not all paths use reflection")]
-    [SuppressMessage("AOT", "IL3051:'RequiresDynamicCodeAttribute' annotations must match across all interface implementations or overrides.", Justification = "Not all paths use reflection")]
-#endif
-    public void Register(Action<Func<object>, Type> registerFunction)
+    public void Register(IRegistrar registrar)
     {
-#if NET6_0_OR_GREATER
-        ArgumentNullException.ThrowIfNull(registerFunction);
-#else
-        if (registerFunction is null)
+        ArgumentExceptionHelper.ThrowIfNull(registrar);
+
+        registrar.RegisterConstant<IPlatformOperations>(static () => new PlatformOperations());
+        registrar.RegisterConstant<ICreatesCommandBinding>(static () => new CreatesWinformsCommandBinding());
+        registrar.RegisterConstant<ICreatesObservableForProperty>(static () =>
+            new WinformsCreatesObservableForProperty());
+        registrar.RegisterConstant<IActivationForViewFetcher>(static () => new ActivationForViewFetcher());
+        registrar.RegisterConstant<ISetMethodBindingConverter>(static () => new PanelSetMethodBindingConverter());
+        registrar.RegisterConstant<ISetMethodBindingConverter>(static () =>
+            new TableContentSetMethodBindingConverter());
+        registrar.RegisterConstant<IBindingTypeConverter>(static () => new StringConverter());
+        registrar.RegisterConstant<IBindingTypeConverter>(static () => new SingleToStringTypeConverter());
+        registrar.RegisterConstant<IBindingTypeConverter>(static () => new DoubleToStringTypeConverter());
+        registrar.RegisterConstant<IBindingTypeConverter>(static () => new DecimalToStringTypeConverter());
+        registrar.RegisterConstant<IBindingFallbackConverter>(static () => new ComponentModelFallbackConverter());
+
+        if (ModeDetector.InUnitTestRunner())
         {
-            throw new ArgumentNullException(nameof(registerFunction));
+            return;
         }
-#endif
 
-        registerFunction(() => new PlatformOperations(), typeof(IPlatformOperations));
-
-        registerFunction(() => new CreatesWinformsCommandBinding(), typeof(ICreatesCommandBinding));
-        registerFunction(() => new WinformsCreatesObservableForProperty(), typeof(ICreatesObservableForProperty));
-        registerFunction(() => new ActivationForViewFetcher(), typeof(IActivationForViewFetcher));
-        registerFunction(() => new PanelSetMethodBindingConverter(), typeof(ISetMethodBindingConverter));
-        registerFunction(() => new TableContentSetMethodBindingConverter(), typeof(ISetMethodBindingConverter));
-        registerFunction(() => new StringConverter(), typeof(IBindingTypeConverter));
-        registerFunction(() => new SingleToStringTypeConverter(), typeof(IBindingTypeConverter));
-        registerFunction(() => new DoubleToStringTypeConverter(), typeof(IBindingTypeConverter));
-        registerFunction(() => new DecimalToStringTypeConverter(), typeof(IBindingTypeConverter));
-        registerFunction(() => new ComponentModelTypeConverter(), typeof(IBindingTypeConverter));
-
-        if (!ModeDetector.InUnitTestRunner())
-        {
-            WindowsFormsSynchronizationContext.AutoInstall = true;
-            RxApp.MainThreadScheduler = new WaitForDispatcherScheduler(() => new SynchronizationContextScheduler(new WindowsFormsSynchronizationContext()));
-        }
+        WindowsFormsSynchronizationContext.AutoInstall = true;
     }
 }

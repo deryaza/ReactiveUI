@@ -1,0 +1,29 @@
+{
+    "platform": {
+        "execution": {
+            "parallel": false
+        }
+    },
+    "codeCoverage": {
+        "Configuration": {
+            "Format": "cobertura",
+            "CodeCoverage": {
+                "SkipAutoProperties": true,
+                "ModulePaths": {
+                    "Include": [
+                        "ReactiveUI\\..*"
+                    ],
+                    "Exclude": [
+                        ".*Tests\\.dll$",
+                        ".*TestRunner.*"
+                    ]
+                },
+                "Functions": {
+                    "Exclude": [
+                        ".*__.*"
+                    ]
+                }
+            }
+        }
+    }
+}

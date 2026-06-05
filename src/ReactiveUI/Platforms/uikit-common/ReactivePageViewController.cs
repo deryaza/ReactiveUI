@@ -1,10 +1,13 @@
-﻿// Copyright (c) 2025 .NET Foundation and Contributors. All rights reserved.
+// Copyright (c) 2009-2026 .NET Foundation and Contributors. All rights reserved.
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
 
+using System.ComponentModel;
+using System.Diagnostics.CodeAnalysis;
+using System.Reactive;
+using System.Reactive.Subjects;
 using Foundation;
-
 using UIKit;
 
 namespace ReactiveUI;
@@ -14,13 +17,13 @@ namespace ReactiveUI;
 /// (i.e. you can call RaiseAndSetIfChanged).
 /// </summary>
 [SuppressMessage("Design", "CA1010: Implement generic IEnumerable", Justification = "UI Kit exposes IEnumerable")]
-#if NET6_0_OR_GREATER
-[RequiresDynamicCode("ReactivePageViewController inherits from ReactiveObject which uses extension methods that require dynamic code generation")]
-[RequiresUnreferencedCode("ReactivePageViewController inherits from ReactiveObject which uses extension methods that may require unreferenced code")]
-#endif
-public abstract class ReactivePageViewController : UIPageViewController, IReactiveNotifyPropertyChanged<ReactivePageViewController>, IHandleObservableErrors, IReactiveObject, ICanActivate
+public abstract class ReactivePageViewController : UIPageViewController, IReactiveNotifyPropertyChanged<ReactivePageViewController>,
+    IHandleObservableErrors, IReactiveObject, ICanActivate
 {
+    /// <summary>The subject used to signal view activation.</summary>
     private readonly Subject<Unit> _activated = new();
+
+    /// <summary>The subject used to signal view deactivation.</summary>
     private readonly Subject<Unit> _deactivated = new();
 
     /// <summary>
@@ -62,7 +65,11 @@ public abstract class ReactivePageViewController : UIPageViewController, IReacti
     /// <param name="orientation">The orientation.</param>
     /// <param name="spineLocation">The spine location.</param>
     /// <param name="interPageSpacing">The inter page spacing.</param>
-    protected ReactivePageViewController(UIPageViewControllerTransitionStyle style, UIPageViewControllerNavigationOrientation orientation, UIPageViewControllerSpineLocation spineLocation, float interPageSpacing)
+    protected ReactivePageViewController(
+        UIPageViewControllerTransitionStyle style,
+        UIPageViewControllerNavigationOrientation orientation,
+        UIPageViewControllerSpineLocation spineLocation,
+        float interPageSpacing)
         : base(style, orientation, spineLocation, interPageSpacing)
     {
     }
@@ -127,10 +134,10 @@ public abstract class ReactivePageViewController : UIPageViewController, IReacti
     public IObservable<Exception> ThrownExceptions => this.GetThrownExceptionsObservable();
 
     /// <inheritdoc/>
-    public IObservable<Unit> Activated => _activated.AsObservable();
+    public IObservable<Unit> Activated => _activated;
 
     /// <inheritdoc/>
-    public IObservable<Unit> Deactivated => _deactivated.AsObservable();
+    public IObservable<Unit> Deactivated => _deactivated;
 
     /// <inheritdoc/>
     void IReactiveObject.RaisePropertyChanging(PropertyChangingEventArgs args) => PropertyChanging?.Invoke(this, args);
@@ -183,13 +190,10 @@ public abstract class ReactivePageViewController : UIPageViewController, IReacti
 /// <typeparam name="TViewModel">The view model type.</typeparam>
 [SuppressMessage("Design", "CA1010: Implement generic IEnumerable", Justification = "UI Kit exposes IEnumerable")]
 [SuppressMessage("StyleCop.CSharp.MaintainabilityRules", "SA1402:FileMayOnlyContainASingleType", Justification = "Classes with the same class names within.")]
-#if NET6_0_OR_GREATER
-[RequiresDynamicCode("ReactivePageViewController<TViewModel> inherits from ReactiveObject which uses extension methods that require dynamic code generation")]
-[RequiresUnreferencedCode("ReactivePageViewController<TViewModel> inherits from ReactiveObject which uses extension methods that may require unreferenced code")]
-#endif
 public abstract class ReactivePageViewController<TViewModel> : ReactivePageViewController, IViewFor<TViewModel>
     where TViewModel : class
 {
+    /// <summary>The backing field for the <see cref="ViewModel"/> property.</summary>
     private TViewModel? _viewModel;
 
     /// <summary>
@@ -231,7 +235,11 @@ public abstract class ReactivePageViewController<TViewModel> : ReactivePageViewC
     /// <param name="orientation">The view controller navigation orientation.</param>
     /// <param name="spineLocation">The view controller spine location.</param>
     /// <param name="interPageSpacing">The spacing between pages.</param>
-    protected ReactivePageViewController(UIPageViewControllerTransitionStyle style, UIPageViewControllerNavigationOrientation orientation, UIPageViewControllerSpineLocation spineLocation, float interPageSpacing)
+    protected ReactivePageViewController(
+        UIPageViewControllerTransitionStyle style,
+        UIPageViewControllerNavigationOrientation orientation,
+        UIPageViewControllerSpineLocation spineLocation,
+        float interPageSpacing)
         : base(style, orientation, spineLocation, interPageSpacing)
     {
     }

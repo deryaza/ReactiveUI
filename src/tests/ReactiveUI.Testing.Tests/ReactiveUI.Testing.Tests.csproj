@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>$(ReactiveUITestingTargets)</TargetFrameworks>
+    <OutputType>Exe</OutputType>
+    <FodyTargetFramework>netstandard2.0</FodyTargetFramework>
+    <FodyTargetFramework Condition=" $(TargetFramework.StartsWith('net4')) ">$(TargetFramework)</FodyTargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ReactiveUI.Test.Utilities\ReactiveUI.Test.Utilities.csproj"/>
+    <ProjectReference Include="..\..\ReactiveUI.Testing\ReactiveUI.Testing.csproj"/>
+    <ProjectReference Include="..\..\ReactiveUI.Testing.Reactive\ReactiveUI.Testing.Reactive.csproj"/>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="API\**\*.txt" CopyToOutputDirectory="PreserveNewest" LinkBase="/"/>
+  </ItemGroup>
+
+</Project>

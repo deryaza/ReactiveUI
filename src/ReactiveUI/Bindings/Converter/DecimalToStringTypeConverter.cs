@@ -1,65 +1,42 @@
-﻿// Copyright (c) 2025 .NET Foundation and Contributors. All rights reserved.
+// Copyright (c) 2009-2026 .NET Foundation and Contributors. All rights reserved.
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
 
+using System.Diagnostics.CodeAnalysis;
+
 namespace ReactiveUI;
 
 /// <summary>
-/// Decimal To String Type Converter.
+/// Converts <see cref="decimal"/> values to <see cref="string"/>.
 /// </summary>
-/// <seealso cref="ReactiveUI.IBindingTypeConverter" />
-public class DecimalToStringTypeConverter : IBindingTypeConverter
+public sealed class DecimalToStringTypeConverter : BindingTypeConverter<decimal, string>
 {
     /// <inheritdoc/>
-    public int GetAffinityForObjects(Type fromType, Type toType)
-    {
-        if (fromType == typeof(decimal) && toType == typeof(string))
-        {
-            return 10;
-        }
-
-        if (fromType == typeof(string) && toType == typeof(decimal))
-        {
-            return 10;
-        }
-
-        return 0;
-    }
+    public override int GetAffinityForObjects() => BindingAffinity.DefaultInternalTypeConverter;
 
     /// <inheritdoc/>
-    public bool TryConvert(object? from, Type toType, object? conversionHint, out object result)
+    public override bool TryConvert(decimal from, object? conversionHint, [NotNullWhen(true)] out string? result)
     {
-        if (toType == typeof(string) && from is decimal fromDecimal)
+        switch (conversionHint)
         {
-            if (conversionHint is int decimalHint)
-            {
-                result = fromDecimal.ToString($"F{decimalHint}");
-                return true;
-            }
-
-            result = fromDecimal.ToString();
-            return true;
-        }
-
-        if (from is string fromString)
-        {
-            var success = decimal.TryParse(fromString, out var outDecimal);
-            if (success)
-            {
-                if (conversionHint is int decimalHint)
+            case int decimalPlaces:
                 {
-                    result = Math.Round(outDecimal, decimalHint);
+                    result = from.ToString($"F{decimalPlaces}");
                     return true;
                 }
 
-                result = outDecimal;
+            case string format:
+                {
+                    result = from.ToString(format);
+                    return true;
+                }
 
-                return true;
-            }
+            default:
+                {
+                    result = from.ToString(System.Globalization.CultureInfo.CurrentCulture);
+                    return true;
+                }
         }
-
-        result = null!;
-        return false;
     }
 }
