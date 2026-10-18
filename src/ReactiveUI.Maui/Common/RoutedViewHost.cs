@@ -1,161 +1,94 @@
-﻿// Copyright (c) 2009-2026 .NET Foundation and Contributors. All rights reserved.
+// Copyright (c) 2009-2026 .NET Foundation and Contributors. All rights reserved.
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
 
 #if WINUI_TARGET
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
-using System.Reactive.Disposables;
-using System.Reactive.Disposables.Fluent;
 using Microsoft.UI.Xaml;
-
-using ReactiveUI.Internal;
+#if REACTIVE_SHIM
+using ReactiveUI.Reactive.Maui.Internal;
+#else
 using ReactiveUI.Maui.Internal;
-using Splat;
-
+#endif
+#if REACTIVE_SHIM
+namespace ReactiveUI.Reactive;
+#else
 namespace ReactiveUI;
+#endif
 
 /// <summary>
 /// This control hosts the View associated with a Router, and will display
 /// the View and wire up the ViewModel whenever a new ViewModel is
 /// navigated to. Put this control as the only control in your Window.
 /// </summary>
-[RequiresUnreferencedCode("This class uses reflection to determine view model types at runtime through ViewLocator, which may be incompatible with trimming.")]
-[RequiresDynamicCode("ViewLocator.ResolveView uses reflection which is incompatible with AOT compilation.")]
-public partial class RoutedViewHost : TransitioningContentControl, IActivatableView, IEnableLogger
+/// <remarks>
+/// The host asks the view locator for each page's view by the view model's run-time type, without building any type
+/// at run time, so it is safe to trim and to compile ahead of time. The default locator checks the view lookup the
+/// source generator writes, then the views the app added with <c>Map</c>. A view registered only with the service
+/// locator needs <see cref="RoutedViewHostUnsafe"/>.
+/// </remarks>
+[DebuggerDisplay("Router = {Router}")]
+public partial class RoutedViewHost : TransitioningContentControl, IActivatableView, IMauiRoutedViewHost
 {
-    /// <summary>
-    /// The router dependency property.
-    /// </summary>
+    /// <summary>The router dependency property.</summary>
     public static readonly DependencyProperty RouterProperty =
-        DependencyProperty.Register("Router", typeof(RoutingState), typeof(RoutedViewHost), new PropertyMetadata(null));
+        DependencyProperty.Register(nameof(Router), typeof(RoutingState), typeof(RoutedViewHost), new(null));
 
-    /// <summary>
-    /// The default content property.
-    /// </summary>
+    /// <summary>The default content property.</summary>
     public static readonly DependencyProperty DefaultContentProperty =
-        DependencyProperty.Register("DefaultContent", typeof(object), typeof(RoutedViewHost), new PropertyMetadata(null));
+        DependencyProperty.Register(nameof(DefaultContent), typeof(object), typeof(RoutedViewHost), new(null));
 
-    /// <summary>
-    /// The view contract observable property.
-    /// </summary>
+    /// <summary>The view contract observable property.</summary>
     public static readonly DependencyProperty ViewContractObservableProperty =
-        DependencyProperty.Register("ViewContractObservable", typeof(IObservable<string>), typeof(RoutedViewHost), new PropertyMetadata(new ReturnObservable<string?>(null)));
+        DependencyProperty.Register(nameof(ViewContractObservable), typeof(IObservable<string>), typeof(RoutedViewHost), new(Signal.Emit<string?>(null)));
 
     /// <summary>The subscriptions created during construction, disposed together.</summary>
-    private readonly CompositeDisposable _subscriptions = [];
+    private readonly MultipleDisposable _subscriptions = [];
+
+    /// <summary>Asks a view locator for the view of a view model under a contract.</summary>
+    private readonly Func<IViewLocator, object, string?, IViewFor?> _resolveView;
 
     /// <summary>The most recently observed view contract.</summary>
     private string? _viewContract;
 
-    /// <summary>
-    /// Initializes a new instance of the <see cref="RoutedViewHost"/> class.
-    /// </summary>
-    [SuppressMessage("Major Bug", "S3366:Do not call overridable methods in constructors", Justification = "Wires reactive bindings to this control's own dependency properties during construction.")]
+    /// <summary>Initializes a new instance of the <see cref="RoutedViewHost"/> class.</summary>
     public RoutedViewHost()
+        : this(ViewHostResolution.ResolveViewWithoutReflection)
     {
+    }
+
+    /// <summary>Initializes a new instance of the <see cref="RoutedViewHost"/> class with its view lookup.</summary>
+    /// <param name="resolveView">Asks a view locator for the view of a view model under a contract.</param>
+    [SuppressMessage(
+        "Design",
+        "SST2403:'this' escapes before construction finishes",
+        Justification = "The single-threaded UI control hands 'this' to MauiReactiveHelpers to observe its own dependency-property changes; it is never published to another thread.")]
+    private protected RoutedViewHost(Func<IViewLocator, object, string?, IViewFor?> resolveView)
+    {
+        _resolveView = resolveView;
         HorizontalContentAlignment = HorizontalAlignment.Stretch;
         VerticalContentAlignment = VerticalAlignment.Stretch;
 
-        var platform = AppLocator.Current.GetService<IPlatformOperations>();
-        Func<string?> platformGetter = () => default;
-
-        if (platform is null)
-        {
-            // NB: This used to be an error but WPF design mode can't read
-            // good or do other stuff good.
-            this.Log().Error(
-                "Couldn't find an IPlatformOperations implementation. Please make sure you have installed the latest " +
-                "version of the ReactiveUI packages for your platform. See https://reactiveui.net/docs/getting-started/installation for guidance.");
-        }
-        else
-        {
-            platformGetter = platform.GetOrientation;
-        }
-
-        ViewContractObservable = ModeDetector.InUnitTestRunner()
-            ? NeverObservable<string>.Instance
-
-            // Replaces FromEvent(SizeChanged).StartWith(platformGetter()).DistinctUntilChanged().
-            : new DistinctUntilChangedObservable<string?>(
-                new StartWithObservable<string?>(
-                    new FromEventObservable<string?>(onNext =>
-                    {
-                        void Handler(object sender, SizeChangedEventArgs e) => onNext(platformGetter());
-                        SizeChanged += Handler;
-                        return new ActionDisposable(() => SizeChanged -= Handler);
-                    }),
-                    platformGetter()));
-
-        // Observe Router property changes using DependencyProperty (AOT-friendly)
-        var routerChanged = MauiReactiveHelpers.CreatePropertyValueObservable(
-            this,
-            nameof(Router),
-            RouterProperty,
-            () => Router);
-
-        // Observe ViewContractObservable property changes using DependencyProperty (AOT-friendly)
-        var viewContractObservableChanged = MauiReactiveHelpers.CreatePropertyValueObservable(
-            this,
-            nameof(ViewContractObservable),
-            ViewContractObservableProperty,
-            () => ViewContractObservable);
-
-        // Observe current view model from router. Replaces Where(...).SelectMany(r => r.CurrentViewModel).StartWith(null).
-        var currentViewModel = new StartWithObservable<IRoutableViewModel?>(
-            new SelectManyObservable<RoutingState?, IRoutableViewModel>(
-                new WhereObservable<RoutingState?>(routerChanged, static router => router is not null),
-                static router => router!.CurrentViewModel),
-            null);
-
-        // Flatten the ViewContractObservable observable-of-observable.
-        // Replaces SelectMany(x => x ?? Return(null)).Do(x => _viewContract = x).StartWith(ViewContract).
-        var viewContract = new StartWithObservable<string?>(
-            new DoObservable<string?>(
-                new SelectManyObservable<IObservable<string?>, string?>(
-                    viewContractObservableChanged,
-                    static x => x ?? new ReturnObservable<string?>(null)),
-                x => _viewContract = x),
-            ViewContract);
-
-        var vmAndContract = new CombineLatestObservable<IRoutableViewModel?, string?, (IRoutableViewModel? viewModel, string? contract)>(
-            currentViewModel,
-            viewContract,
-            static (viewModel, contract) => (viewModel, contract));
-
-        // Subscribe directly without WhenActivated
-        // NB: The DistinctUntilChanged is useful because most views in
-        // WinRT will end up getting here twice - once for configuring
-        // the RoutedViewHost's ViewModel, and once on load via SizeChanged
-        new DistinctUntilChangedObservable<(IRoutableViewModel? viewModel, string? contract)>(vmAndContract)
-            .Subscribe(new DelegateObserver<(IRoutableViewModel? viewModel, string? contract)>(
-                ResolveViewForViewModel,
-                RxState.DefaultExceptionHandler.OnNext))
-            .DisposeWith(_subscriptions);
+        MauiReactiveHelpers.InitializeRoutedViewHost(this, RouterProperty, ViewContractObservableProperty, _subscriptions, ResolveViewForViewModel);
     }
 
-    /// <summary>
-    /// Gets or sets the <see cref="RoutingState"/> of the view model stack.
-    /// </summary>
+    /// <summary>Gets or sets the <see cref="RoutingState"/> of the view model stack.</summary>
     public RoutingState Router
     {
         get => (RoutingState)GetValue(RouterProperty);
         set => SetValue(RouterProperty, value);
     }
 
-    /// <summary>
-    /// Gets or sets the content displayed whenever there is no page currently
-    /// routed.
-    /// </summary>
+    /// <summary>Gets or sets the content displayed whenever there is no page currently routed.</summary>
     public object DefaultContent
     {
         get => GetValue(DefaultContentProperty);
         set => SetValue(DefaultContentProperty, value);
     }
 
-    /// <summary>
-    /// Gets or sets the view contract observable.
-    /// </summary>
+    /// <summary>Gets or sets the view contract observable.</summary>
     /// <value>
     /// The view contract observable.
     /// </value>
@@ -165,44 +98,42 @@ public partial class RoutedViewHost : TransitioningContentControl, IActivatableV
         set => SetValue(ViewContractObservableProperty, value);
     }
 
-    /// <summary>
-    /// Gets or sets the view contract.
-    /// </summary>
-    [SuppressMessage(
-        "Critical Bug",
-        "S4275:Getters and setters should access the expected fields",
-        Justification = "Setter routes through ViewContractObservable; _viewContract is updated by its subscription.")]
+    /// <summary>Gets or sets the view contract.</summary>
     public string? ViewContract
     {
         get => _viewContract;
-        set => ViewContractObservable = new ReturnObservable<string?>(value);
+        set
+        {
+            _viewContract = value;
+            ViewContractObservable = Signal.Emit(value);
+        }
     }
 
-    /// <summary>
-    /// Gets or sets the view locator.
-    /// </summary>
+    /// <summary>Gets or sets the view locator.</summary>
     /// <value>
     /// The view locator.
     /// </value>
     public IViewLocator? ViewLocator { get; set; }
 
+    /// <inheritdoc/>
+    void IMauiRoutedViewHost.SetObservedViewContract(string? contract) => _viewContract = contract;
+
     /// <summary>Resolves and hosts the view for the supplied view model/contract pair.</summary>
-    /// <param name="x">The view model and contract to resolve a view for.</param>
-    [RequiresUnreferencedCode("This method uses reflection to determine the view model type at runtime, which may be incompatible with trimming.")]
-    [RequiresDynamicCode("If some of the generic arguments are annotated (either with DynamicallyAccessedMembersAttribute, " +
-        "or generic constraints), trimming can't validate that the requirements of those annotations are met.")]
-    private void ResolveViewForViewModel((IRoutableViewModel? viewModel, string? contract) x)
+    /// <param name="route">The view model and contract to resolve a view for.</param>
+    /// <exception cref="InvalidOperationException">No view is registered for the routed view model.</exception>
+    private void ResolveViewForViewModel((IRoutableViewModel? ViewModel, string? Contract) route)
     {
-        if (x.viewModel is null)
+        if (route.ViewModel is null)
         {
             Content = DefaultContent;
             return;
         }
 
-        var viewLocator = ViewLocator ?? ReactiveUI.ViewLocator.Current;
-        var view = (viewLocator.ResolveView(x.viewModel, x.contract) ?? viewLocator.ResolveView(x.viewModel))
-            ?? throw new InvalidOperationException($"Couldn't find view for '{x.viewModel}'.");
-        view.ViewModel = x.viewModel;
+        var view = ViewHostResolution.ResolveViewWithFallback(_resolveView, ViewLocator, route.ViewModel, route.Contract, contractFallbackByPass: false)
+            ?? throw new InvalidOperationException(
+                $"Couldn't find view for '{route.ViewModel}'. The view locator checked the generated view lookup and its Map registrations; "
+                + $"use {nameof(RoutedViewHostUnsafe)} to also resolve a view registered only with the service locator.");
+        view.ViewModel = route.ViewModel;
         Content = view;
     }
 }

@@ -4,34 +4,23 @@
 // See the LICENSE file in the project root for full license information.
 
 using System.Collections.ObjectModel;
-using System.Diagnostics.CodeAnalysis;
+using System.Diagnostics;
 
 namespace ReactiveUI.Builder.BlazorServer.Models;
 
-/// <summary>
-/// Represents a chat room with messages and members.
-/// </summary>
+/// <summary>Represents a chat room with messages and members.</summary>
+[DebuggerDisplay("ChatRoom Name={Name}, Id={Id}")]
 public class ChatRoom
 {
-    /// <summary>
-    /// Gets or sets the room id.
-    /// </summary>
+    /// <summary>Gets or sets the room id.</summary>
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
 
-    /// <summary>
-    /// Gets or sets the room name.
-    /// </summary>
+    /// <summary>Gets or sets the room name.</summary>
     public string Name { get; set; } = string.Empty;
 
-    /// <summary>
-    /// Gets or sets the messages in the room.
-    /// </summary>
-    [SuppressMessage("Major Code Smell", "S4004:Collection properties should be read only", Justification = "Public setter required for System.Text.Json deserialization of persisted state.")]
-    public ObservableCollection<ChatMessage> Messages { get; set; } = [];
+    /// <summary>Gets the messages in the room.</summary>
+    public ObservableCollection<ChatMessage> Messages { get; } = [];
 
-    /// <summary>
-    /// Gets or sets the members in the room.
-    /// </summary>
-    [SuppressMessage("Major Code Smell", "S4004:Collection properties should be read only", Justification = "Public setter required for System.Text.Json deserialization of persisted state.")]
-    public List<string> Members { get; set; } = [];
+    /// <summary>Gets the members in the room.</summary>
+    public List<string> Members { get; } = [];
 }

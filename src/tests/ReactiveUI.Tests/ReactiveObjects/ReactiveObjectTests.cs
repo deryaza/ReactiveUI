@@ -5,30 +5,34 @@
 
 using System.Collections;
 using System.ComponentModel;
-using System.Reactive.Concurrency;
-using System.Reactive.Linq;
 using System.Text.Json;
-using DynamicData;
 using ReactiveUI.Tests.ReactiveObjects.Mocks;
 using ReactiveUI.Tests.Utilities;
 
 namespace ReactiveUI.Tests.ReactiveObjects;
 
-/// <summary>
-///     Tests for <see cref="ReactiveObject" /> change notification behavior.
-/// </summary>
+/// <summary>Tests for <see cref="ReactiveObject" /> change notification behavior.</summary>
 public class ReactiveObjectTests
 {
+    /// <summary>The "Foo" text value used in property change tests.</summary>
     private const string FooText = "Foo";
+
+    /// <summary>The "Bar" text value used in property change tests.</summary>
     private const string BarText = "Bar";
+
+    /// <summary>The "Baz" text value used in property change tests.</summary>
     private const string BazText = "Baz";
+
+    /// <summary>The property name for the IsNotNullString property.</summary>
     private const string IsNotNullStringName = "IsNotNullString";
+
+    /// <summary>The property name for the IsOnlyOneWord property.</summary>
     private const string IsOnlyOneWordName = "IsOnlyOneWord";
+
+    /// <summary>The property name for the NullableInt property.</summary>
     private const string NullableIntName = "NullableInt";
 
-    /// <summary>
-    ///     Test that changing values should always arrive before changed.
-    /// </summary>
+    /// <summary>Test that changing values should always arrive before changed.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task ChangingShouldAlwaysArriveBeforeChanged()
@@ -41,7 +45,7 @@ public class ReactiveObjectTests
         var beforeFired = false;
         string? changingPropertyName = null;
         string? changingValue = null;
-        fixture.Changing.Subscribe(x =>
+        _ = fixture.Changing.Subscribe(x =>
         {
             changingPropertyName = x.PropertyName;
             changingValue = fixture.IsOnlyOneWord;
@@ -51,7 +55,7 @@ public class ReactiveObjectTests
         var afterFired = false;
         string? changedPropertyName = null;
         string? changedValue = null;
-        fixture.Changed.Subscribe(x =>
+        _ = fixture.Changed.Subscribe(x =>
         {
             changedPropertyName = x.PropertyName;
             changedValue = fixture.IsOnlyOneWord;
@@ -71,9 +75,7 @@ public class ReactiveObjectTests
         }
     }
 
-    /// <summary>
-    ///     Test that deferring the notifications dont show up until undeferred.
-    /// </summary>
+    /// <summary>Test that deferring the notifications dont show up until undeferred.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task DeferredNotificationsDontShowUpUntilUndeferred()
@@ -83,8 +85,8 @@ public class ReactiveObjectTests
         const int ThirdInt = 6;
         const int ExpectedCountAfterUndefer = 3;
         var fixture = new TestFixture();
-        fixture.Changing.ToObservableChangeSet(ImmediateScheduler.Instance).Bind(out var changing).Subscribe();
-        fixture.Changed.ToObservableChangeSet(ImmediateScheduler.Instance).Bind(out var changed).Subscribe();
+        var changing = fixture.Changing.Collect();
+        var changed = fixture.Changed.Collect();
         var propertyChangingEvents = new List<PropertyChangingEventArgs>();
         fixture.PropertyChanging += (_, args) => propertyChangingEvents.Add(args);
         var propertyChangedEvents = new List<PropertyChangedEventArgs>();
@@ -128,40 +130,38 @@ public class ReactiveObjectTests
         var expectedEventProperties = new[] { NullableIntName, NullableIntName, IsNotNullStringName };
         using (Assert.Multiple())
         {
-            await Assert.That(changing.Select(e => e.PropertyName!)).IsEquivalentTo(expectedEventProperties);
-            await Assert.That(changed.Select(e => e.PropertyName!)).IsEquivalentTo(expectedEventProperties);
-            await Assert.That(propertyChangingEvents.Select(e => e.PropertyName!)).IsEquivalentTo(expectedEventProperties);
-            await Assert.That(propertyChangedEvents.Select(e => e.PropertyName!)).IsEquivalentTo(expectedEventProperties);
+            await Assert.That(changing.Select(static e => e.PropertyName!)).IsEquivalentTo(expectedEventProperties);
+            await Assert.That(changed.Select(static e => e.PropertyName!)).IsEquivalentTo(expectedEventProperties);
+            await Assert.That(propertyChangingEvents.Select(static e => e.PropertyName!)).IsEquivalentTo(expectedEventProperties);
+            await Assert.That(propertyChangedEvents.Select(static e => e.PropertyName!)).IsEquivalentTo(expectedEventProperties);
         }
     }
 
-    /// <summary>
-    ///     Test that exceptions thrown in subscribers should marshal to thrown exceptions.
-    /// </summary>
+    /// <summary>Test that exceptions thrown in subscribers should marshal to thrown exceptions.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task ExceptionsThrownInSubscribersShouldMarshalToThrownExceptions()
     {
         var fixture = new TestFixture { IsOnlyOneWord = FooText };
 
-        fixture.Changed.Subscribe(static _ => throw new InvalidOperationException("Die!"));
-        fixture.ThrownExceptions.ToObservableChangeSet(ImmediateScheduler.Instance).Bind(out var exceptionList).Subscribe();
+        _ = fixture.Changed.Subscribe(static _ => throw new InvalidOperationException("Die!"));
+        var exceptionList = fixture.ThrownExceptions.Collect();
 
         fixture.IsOnlyOneWord = BarText;
         await Assert.That(exceptionList).Count().IsEqualTo(1);
     }
 
-    /// <summary>
-    ///     Tests that ObservableForProperty using expression.
-    /// </summary>
+    /// <summary>Tests generated observation of property changes.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
-    public async Task ObservableForPropertyUsingExpression()
+    public async Task WhenAnyUsingExpression()
     {
         const int ExpectedCount = 2;
         var fixture = new TestFixture { IsNotNullString = FooText, IsOnlyOneWord = BazText };
-        var output = new List<IObservedChange<TestFixture, string?>>();
-        fixture.ObservableForProperty(x => x.IsNotNullString).WhereNotNull().Subscribe(output.Add);
+        var output = new List<IObservedChange<TestFixture, string?>?>();
+        using var subscription = fixture.WhenAny(static x => x.IsNotNullString, static change => change)
+            .Skip(1)
+            .Subscribe(output.Add);
 
         fixture.IsNotNullString = BarText;
         fixture.IsNotNullString = BazText;
@@ -173,26 +173,24 @@ public class ReactiveObjectTests
 
         using (Assert.Multiple())
         {
-            await Assert.That(output[0].Sender).IsEqualTo(fixture);
-            await Assert.That(output[0].GetPropertyName()).IsEqualTo(IsNotNullStringName);
-            await Assert.That(output[0].Value).IsEqualTo(BarText);
+            await Assert.That(output[0]!.Sender).IsEqualTo(fixture);
+            await Assert.That(output[0]!.Expression).IsNull();
+            await Assert.That(output[0]!.Value).IsEqualTo(BarText);
 
-            await Assert.That(output[1].Sender).IsEqualTo(fixture);
-            await Assert.That(output[1].GetPropertyName()).IsEqualTo(IsNotNullStringName);
-            await Assert.That(output[1].Value).IsEqualTo(BazText);
+            await Assert.That(output[1]!.Sender).IsEqualTo(fixture);
+            await Assert.That(output[1]!.Expression).IsNull();
+            await Assert.That(output[1]!.Value).IsEqualTo(BazText);
         }
     }
 
-    /// <summary>
-    ///     Test raises and set using expression.
-    /// </summary>
+    /// <summary>Test raises and set using expression.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task RaiseAndSetUsingExpression()
     {
         var fixture = new TestFixture { IsNotNullString = FooText, IsOnlyOneWord = BazText };
         var output = new List<string>();
-        fixture.Changed.Where(x => x.PropertyName is not null).Select(x => x.PropertyName!).Subscribe(output.Add);
+        _ = fixture.Changed.Where(static x => x.PropertyName is not null).Select(static x => x.PropertyName!).Subscribe(output.Add);
 
         fixture.UsesExprRaiseSet = FooText;
         fixture.UsesExprRaiseSet = FooText; // This one shouldn't raise a change notification
@@ -206,9 +204,7 @@ public class ReactiveObjectTests
         await Assert.That(output[0]).IsEqualTo("UsesExprRaiseSet");
     }
 
-    /// <summary>
-    ///     Test that change notifications can be suppressed and re-enabled, including after serialization.
-    /// </summary>
+    /// <summary>Test that change notifications can be suppressed and re-enabled, including after serialization.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task ReactiveObjectCanSuppressChangeNotifications()
@@ -234,22 +230,21 @@ public class ReactiveObjectTests
         await Assert.That(deser.AreChangeNotificationsEnabled()).IsTrue();
     }
 
-    /// <summary>
-    ///     Test that ReactiveObject shouldn't serialize anything extra.
-    /// </summary>
+    /// <summary>Test that ReactiveObject shouldn't serialize anything extra.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
+    /// <exception cref="InvalidOperationException">Serializing the fixture produced a null JSON string.</exception>
     [Test]
     public async Task ReactiveObjectShouldntSerializeAnythingExtra()
     {
         var fixture = new TestFixture { IsNotNullString = FooText, IsOnlyOneWord = BazText };
-        var json = JsonHelper.Serialize(fixture) ??
-                   throw new InvalidOperationException("JSON string should not be null");
+        var json = JsonHelper.Serialize(fixture)
+                   ?? throw new InvalidOperationException("JSON string should not be null");
 
         using (Assert.Multiple())
         {
-            // Should look something like:
-            // {IsNotNullStringName:FooText,IsOnlyOneWordName:BazText,NullableIntName:null,"StackOverflowTrigger":null,"TestCollection":[],"UsesExprRaiseSet":null}
-            // PocoProperty is excluded because it lacks [DataMember] attribute
+            // The serialized JSON is expected to contain IsNotNullString, IsOnlyOneWord, NullableInt,
+            // StackOverflowTrigger, TestCollection and UsesExprRaiseSet members.
+            // PocoProperty is excluded because it lacks the DataMember attribute.
             const int ExpectedCommaCount = 5;
             const int ExpectedColonCount = 6;
             const int ExpectedQuoteCount = 16;
@@ -259,22 +254,18 @@ public class ReactiveObjectTests
         }
     }
 
-    /// <summary>
-    ///     Tests to make sure that ReactiveObject doesn't rethrow exceptions.
-    /// </summary>
+    /// <summary>Tests to make sure that ReactiveObject doesn't rethrow exceptions.</summary>
     [Test]
     public void ReactiveObjectShouldRethrowException()
     {
         var fixture = new TestFixture();
         var observable = fixture.WhenAnyValue(x => x.IsOnlyOneWord).Skip(1);
-        observable.Subscribe(_ => throw new InvalidOperationException("This is a test."));
+        _ = observable.Subscribe(static _ => throw new InvalidOperationException("This is a test."));
 
-        Assert.Throws<Exception>(() => fixture.IsOnlyOneWord = "Two Words");
+        _ = Assert.Throws<Exception>(() => fixture.IsOnlyOneWord = "Two Words");
     }
 
-    /// <summary>
-    ///     Performs a ReactiveObject smoke test.
-    /// </summary>
+    /// <summary>Performs a ReactiveObject smoke test.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task ReactiveObjectSmokeTest()
@@ -283,8 +274,8 @@ public class ReactiveObjectTests
         var output = new List<string>();
         var fixture = new TestFixture();
 
-        fixture.Changing.Where(x => x.PropertyName is not null).Select(x => x.PropertyName!).Subscribe(outputChanging.Add);
-        fixture.Changed.Where(x => x.PropertyName is not null).Select(x => x.PropertyName!).Subscribe(output.Add);
+        _ = fixture.Changing.Where(static x => x.PropertyName is not null).Select(static x => x.PropertyName!).Subscribe(outputChanging.Add);
+        _ = fixture.Changed.Where(static x => x.PropertyName is not null).Select(static x => x.PropertyName!).Subscribe(output.Add);
 
         fixture.IsNotNullString = "Foo Bar Baz";
         fixture.IsOnlyOneWord = FooText;
@@ -300,9 +291,7 @@ public class ReactiveObjectTests
         await results.AssertAreEqual(output);
     }
 
-    /// <summary>
-    ///     Asserts that every supplied collection has the expected element count.
-    /// </summary>
+    /// <summary>Asserts that every supplied collection has the expected element count.</summary>
     /// <param name="expected">The expected count.</param>
     /// <param name="collections">The collections to check.</param>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>

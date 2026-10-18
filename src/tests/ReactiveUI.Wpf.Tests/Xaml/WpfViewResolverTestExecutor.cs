@@ -3,10 +3,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
 
-using System.Reactive.Concurrency;
 using System.Windows.Threading;
-using ReactiveUI.Builder;
 using ReactiveUI.Tests.Utilities.AppBuilder;
+using ReactiveUI.Tests.Wpf;
 
 namespace ReactiveUI.Tests.Xaml;
 
@@ -14,23 +13,21 @@ namespace ReactiveUI.Tests.Xaml;
 /// Provides a test executor that initializes and cleans up the ReactiveUI WPF environment for unit tests requiring WPF
 /// view resolution and scheduler configuration.
 /// </summary>
-public class WpfViewResolverTestExecutor : STAThreadExecutor
+public class WpfViewResolverTestExecutor : DispatcherThreadExecutor
 {
-    /// <summary>
-    /// Helper that manages app builder setup and teardown for the test.
-    /// </summary>
+    /// <summary>Helper that manages app builder setup and teardown for the test.</summary>
     private readonly AppBuilderTestHelper _helper = new();
 
     /// <inheritdoc/>
-    protected override void Initialize()
+    protected override void SetUp()
     {
-        base.Initialize();
+        base.SetUp();
 
         _helper.Initialize(builder =>
         {
             // Include WPF platform services to ensure view locator, activation, etc. work
             // Register views from this assembly for view resolution tests
-            builder
+            _ = builder
                 .WithViewsFromAssembly(GetType().Assembly)
                 .WithWpf()
                 .WithCoreServices();
@@ -38,16 +35,15 @@ public class WpfViewResolverTestExecutor : STAThreadExecutor
             // Configure WPF scheduler for test execution
             // Note: WithWpf() skips scheduler setup when InUnitTestRunner() is true,
             // so we must manually configure it for tests that need WPF controls
-            var dispatcher = Dispatcher.CurrentDispatcher;
-            RxSchedulers.MainThreadScheduler = new DispatcherScheduler(dispatcher);
-            RxSchedulers.TaskpoolScheduler = TaskPoolScheduler.Default;
+            RxSchedulers.MainThreadScheduler = new DispatcherSequencer(Dispatcher.CurrentDispatcher);
+            RxSchedulers.TaskpoolScheduler = TaskPoolSequencer.Default;
         });
     }
 
     /// <inheritdoc/>
-    protected override void CleanUp()
+    protected override void TearDown()
     {
         _helper.CleanUp();
-        base.CleanUp();
+        base.TearDown();
     }
 }

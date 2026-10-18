@@ -17,8 +17,12 @@
     <PackageDescription>Micro-benchmarks for ReactiveUI's reactive sinks, bindings, commands and change-set layers.</PackageDescription>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="DynamicData" />
     <PackageReference Include="BenchmarkDotNet" />
+  </ItemGroup>
+  <ItemGroup>
+    <Using Include="ReactiveUI.Builder" />
+    <Using Include="ReactiveUI.Primitives.Disposables" />
+    <Using Include="ReactiveUI.Primitives.LinqExtensions" Alias="BenchmarkLinq" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\ReactiveUI\ReactiveUI.csproj" />

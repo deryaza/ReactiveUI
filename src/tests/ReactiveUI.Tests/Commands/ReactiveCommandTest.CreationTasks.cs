@@ -3,52 +3,46 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
 
-using System.Reactive;
-using System.Reactive.Concurrency;
-using System.Reactive.Linq;
-using DynamicData;
-
 namespace ReactiveUI.Tests.Commands;
 
-/// <content>
-///     Tests for the CreateFromTask and CreateRunInBackground factory methods, including
-///     cancellation-token behavior and parameter passing.
-/// </content>
+/// <summary>
+///     Comprehensive test suite for ReactiveCommand.
+///     Tests cover all factory methods, behaviors, and edge cases.
+///     Organized into logical test groups for maintainability.
+/// </summary>
 public partial class ReactiveCommandTest
 {
-    /// <summary>
-    ///     Verifies that disposing an in-flight cancellable task command cancels its execution.
-    /// </summary>
+    /// <summary>Verifies that disposing an in-flight cancellable task command cancels its execution.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task CreateFromTask_Cancellable_ProperlyCancelsExecution()
     {
-        var tcsStarted = new TaskCompletionSource<Unit>();
-        var tcsCaught = new TaskCompletionSource<Unit>();
-        var tcsFinish = new TaskCompletionSource<Unit>();
+        var tcsStarted = new TaskCompletionSource<RxVoid>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var tcsCaught = new TaskCompletionSource<RxVoid>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var tcsFinish = new TaskCompletionSource<RxVoid>(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        const int LongDelayMilliseconds = 10000;
+        const int LongDelayMilliseconds = 10_000;
         const int WaitTimeoutSeconds = 2;
         const int CompletionDelayMilliseconds = 100;
 
         var fixture = ReactiveCommand.CreateFromTask(
             async token =>
             {
-                tcsStarted.TrySetResult(Unit.Default);
+                _ = tcsStarted.TrySetResult(RxVoid.Default);
                 try
                 {
                     await Task.Delay(LongDelayMilliseconds, token);
                 }
                 catch (OperationCanceledException)
                 {
-                    tcsCaught.TrySetResult(Unit.Default);
+                    _ = tcsCaught.TrySetResult(RxVoid.Default);
                     await tcsFinish.Task;
                     throw;
                 }
             },
-            outputScheduler: ImmediateScheduler.Instance);
+            outputScheduler: Sequencer.Immediate);
 
-        fixture.ThrownExceptions.Subscribe(_ => { });
+        _ = fixture.ThrownExceptions.Subscribe(static _ => { });
 
         var disposable = fixture.Execute().Subscribe();
 
@@ -56,15 +50,13 @@ public partial class ReactiveCommandTest
         disposable.Dispose();
 
         await tcsCaught.Task.WaitAsync(TimeSpan.FromSeconds(WaitTimeoutSeconds));
-        tcsFinish.TrySetResult(Unit.Default);
+        _ = tcsFinish.TrySetResult(RxVoid.Default);
 
         // Wait for cancellation to complete
         await Task.Delay(CompletionDelayMilliseconds);
     }
 
-    /// <summary>
-    ///     Verifies that a cancellable Unit task command without a parameter receives a cancellation token.
-    /// </summary>
+    /// <summary>Verifies that a cancellable RxVoid task command without a parameter receives a cancellation token.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task CreateFromTask_Cancellable_Unit_WithoutParam_ReceivesCancellationToken()
@@ -78,27 +70,23 @@ public partial class ReactiveCommandTest
                 receivedToken = token;
                 await Task.Delay(DelayMilliseconds, token);
             },
-            outputScheduler: ImmediateScheduler.Instance);
+            outputScheduler: Sequencer.Immediate);
 
-        await command.Execute();
+        await command.Execute().FirstAsync();
         await Assert.That(receivedToken).IsNotNull();
     }
 
-    /// <summary>
-    ///     Verifies that creating a cancellable Unit task command without a parameter from a null execute argument throws.
-    /// </summary>
+    /// <summary>Verifies that creating a cancellable RxVoid task command without a parameter from a null execute argument throws.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task CreateFromTask_Cancellable_Unit_WithoutParam_ThrowsOnNullExecute() =>
-        await Assert.ThrowsExactlyAsync<ArgumentNullException>(async () =>
+        await Assert.ThrowsExactlyAsync<ArgumentNullException>(static async () =>
         {
             _ = ReactiveCommand.CreateFromTask((Func<CancellationToken, Task>)null!);
             await Task.CompletedTask;
         });
 
-    /// <summary>
-    ///     Verifies that a parameterized cancellable Unit task command receives both the parameter and a token.
-    /// </summary>
+    /// <summary>Verifies that a parameterized cancellable RxVoid task command receives both the parameter and a token.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task CreateFromTask_Cancellable_Unit_WithParam_ReceivesParameterAndToken()
@@ -114,9 +102,9 @@ public partial class ReactiveCommandTest
                 receivedToken = token;
                 await Task.Delay(DelayMilliseconds, token);
             },
-            outputScheduler: ImmediateScheduler.Instance);
+            outputScheduler: Sequencer.Immediate);
 
-        await command.Execute(ParameterValue);
+        await command.Execute(ParameterValue).FirstAsync();
 
         using (Assert.Multiple())
         {
@@ -125,21 +113,17 @@ public partial class ReactiveCommandTest
         }
     }
 
-    /// <summary>
-    ///     Verifies that creating a parameterized cancellable Unit task command from a null execute argument throws.
-    /// </summary>
+    /// <summary>Verifies that creating a parameterized cancellable RxVoid task command from a null execute argument throws.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task CreateFromTask_Cancellable_Unit_WithParam_ThrowsOnNullExecute() =>
-        await Assert.ThrowsExactlyAsync<ArgumentNullException>(async () =>
+        await Assert.ThrowsExactlyAsync<ArgumentNullException>(static async () =>
         {
             _ = ReactiveCommand.CreateFromTask((Func<int, CancellationToken, Task>)null!);
             await Task.CompletedTask;
         });
 
-    /// <summary>
-    ///     Verifies that a cancellable result-returning task command without a parameter receives a cancellation token.
-    /// </summary>
+    /// <summary>Verifies that a cancellable result-returning task command without a parameter receives a cancellation token.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task CreateFromTask_Cancellable_WithoutParam_ReceivesCancellationToken()
@@ -154,9 +138,9 @@ public partial class ReactiveCommandTest
                 await Task.Delay(DelayMilliseconds, token);
                 return ParameterValue;
             },
-            outputScheduler: ImmediateScheduler.Instance);
+            outputScheduler: Sequencer.Immediate);
 
-        await command.Execute();
+        await command.Execute().FirstAsync();
         await Assert.That(receivedToken).IsNotNull();
     }
 
@@ -167,15 +151,13 @@ public partial class ReactiveCommandTest
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task CreateFromTask_Cancellable_WithoutParam_ThrowsOnNullExecute() =>
-        await Assert.ThrowsExactlyAsync<ArgumentNullException>(async () =>
+        await Assert.ThrowsExactlyAsync<ArgumentNullException>(static async () =>
         {
             _ = ReactiveCommand.CreateFromTask((Func<CancellationToken, Task<int>>)null!);
             await Task.CompletedTask;
         });
 
-    /// <summary>
-    ///     Verifies that a parameterized cancellable result-returning task command receives both the parameter and a token.
-    /// </summary>
+    /// <summary>Verifies that a parameterized cancellable result-returning task command receives both the parameter and a token.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task CreateFromTask_Cancellable_WithParam_ReceivesParameterAndToken()
@@ -192,35 +174,32 @@ public partial class ReactiveCommandTest
                 await Task.Delay(DelayMilliseconds, token);
                 return param.ToString();
             },
-            outputScheduler: ImmediateScheduler.Instance);
-        command.ToObservableChangeSet(ImmediateScheduler.Instance).Bind(out var results).Subscribe();
+            outputScheduler: Sequencer.Immediate);
 
-        await command.Execute(ParameterValue);
+        // Capture the result straight from the execution stream rather than from a Collect() broadcast: for an async
+        // command the per-execution OnNext fires before the shared results broadcast (NotifyResult), so reading a
+        // collected list right after FirstAsync races the broadcast. The emitted value is the assertion target anyway.
+        var result = await command.Execute(ParameterValue).FirstAsync();
 
         using (Assert.Multiple())
         {
             await Assert.That(receivedParam).IsEqualTo(ParameterValue);
             await Assert.That(receivedToken).IsNotNull();
-            await Assert.That(results[0]).IsEqualTo(ParameterValueString);
+            await Assert.That(result).IsEqualTo(ParameterValueString);
         }
     }
 
-    /// <summary>
-    ///     Verifies that creating a parameterized cancellable result-returning task command from a null execute argument
-    ///     throws.
-    /// </summary>
+    /// <summary>Verifies that creating a parameterized cancellable result-returning task command from a null execute argument throws.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task CreateFromTask_Cancellable_WithParam_ThrowsOnNullExecute() =>
-        await Assert.ThrowsExactlyAsync<ArgumentNullException>(async () =>
+        await Assert.ThrowsExactlyAsync<ArgumentNullException>(static async () =>
         {
             _ = ReactiveCommand.CreateFromTask((Func<int, CancellationToken, Task<string>>)null!);
             await Task.CompletedTask;
         });
 
-    /// <summary>
-    ///     Verifies that a Unit task command without a parameter completes its task successfully.
-    /// </summary>
+    /// <summary>Verifies that a RxVoid task command without a parameter completes its task successfully.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task CreateFromTask_Unit_WithoutParam_CompletesSuccessfully()
@@ -232,27 +211,23 @@ public partial class ReactiveCommandTest
                 await Task.CompletedTask;
                 executed = true;
             },
-            outputScheduler: ImmediateScheduler.Instance);
+            outputScheduler: Sequencer.Immediate);
 
-        await command.Execute();
+        await command.Execute().FirstAsync();
         await Assert.That(executed).IsTrue();
     }
 
-    /// <summary>
-    ///     Verifies that creating a Unit task command without a parameter from a null execute argument throws.
-    /// </summary>
+    /// <summary>Verifies that creating a RxVoid task command without a parameter from a null execute argument throws.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task CreateFromTask_Unit_WithoutParam_ThrowsOnNullExecute() =>
-        await Assert.ThrowsExactlyAsync<ArgumentNullException>(async () =>
+        await Assert.ThrowsExactlyAsync<ArgumentNullException>(static async () =>
         {
             _ = ReactiveCommand.CreateFromTask((Func<Task>)null!);
             await Task.CompletedTask;
         });
 
-    /// <summary>
-    ///     Verifies that a parameterized Unit task command passes the parameter to its task.
-    /// </summary>
+    /// <summary>Verifies that a parameterized RxVoid task command passes the parameter to its task.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task CreateFromTask_Unit_WithParam_PassesParameter()
@@ -264,83 +239,71 @@ public partial class ReactiveCommandTest
                 await Task.CompletedTask;
                 receivedParam = param;
             },
-            outputScheduler: ImmediateScheduler.Instance);
+            outputScheduler: Sequencer.Immediate);
 
-        await command.Execute(ParameterValue);
+        await command.Execute(ParameterValue).FirstAsync();
         await Assert.That(receivedParam).IsEqualTo(ParameterValue);
     }
 
-    /// <summary>
-    ///     Verifies that creating a parameterized Unit task command from a null execute argument throws.
-    /// </summary>
+    /// <summary>Verifies that creating a parameterized RxVoid task command from a null execute argument throws.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task CreateFromTask_Unit_WithParam_ThrowsOnNullExecute() =>
-        await Assert.ThrowsExactlyAsync<ArgumentNullException>(async () =>
+        await Assert.ThrowsExactlyAsync<ArgumentNullException>(static async () =>
         {
             _ = ReactiveCommand.CreateFromTask((Func<int, Task>)null!);
             await Task.CompletedTask;
         });
 
-    /// <summary>
-    ///     Verifies that a task command without a parameter ticks the result returned by its task.
-    /// </summary>
+    /// <summary>Verifies that a task command without a parameter ticks the result returned by its task.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task CreateFromTask_WithoutParam_ReturnsTaskResult()
     {
         var command = ReactiveCommand.CreateFromTask(
-            () => Task.FromResult(ParameterValue),
-            outputScheduler: ImmediateScheduler.Instance);
-        command.ToObservableChangeSet(ImmediateScheduler.Instance).Bind(out var results).Subscribe();
+            static () => Task.FromResult(ParameterValue),
+            outputScheduler: Sequencer.Immediate);
+        var results = command.Collect();
 
-        await command.Execute();
+        await command.Execute().FirstAsync();
         await Assert.That(results[0]).IsEqualTo(ParameterValue);
     }
 
-    /// <summary>
-    ///     Verifies that creating a task command without a parameter from a null execute argument throws.
-    /// </summary>
+    /// <summary>Verifies that creating a task command without a parameter from a null execute argument throws.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task CreateFromTask_WithoutParam_ThrowsOnNullExecute() =>
-        await Assert.ThrowsExactlyAsync<ArgumentNullException>(async () =>
+        await Assert.ThrowsExactlyAsync<ArgumentNullException>(static async () =>
         {
             _ = ReactiveCommand.CreateFromTask((Func<Task<int>>)null!);
             await Task.CompletedTask;
         });
 
-    /// <summary>
-    ///     Verifies that a parameterized task command passes the parameter to its task and ticks the result.
-    /// </summary>
+    /// <summary>Verifies that a parameterized task command passes the parameter to its task and ticks the result.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task CreateFromTask_WithParam_PassesParameterToTask()
     {
         var command = ReactiveCommand.CreateFromTask<int, string>(
-            param => Task.FromResult(param.ToString()),
-            outputScheduler: ImmediateScheduler.Instance);
-        command.ToObservableChangeSet(ImmediateScheduler.Instance).Bind(out var results).Subscribe();
+            static param => Task.FromResult(param.ToString()),
+            outputScheduler: Sequencer.Immediate);
+        var results = command.Collect();
 
-        await command.Execute(ParameterValue);
+        await command.Execute(ParameterValue).FirstAsync();
         await Assert.That(results[0]).IsEqualTo(ParameterValueString);
     }
 
-    /// <summary>
-    ///     Verifies that creating a parameterized task command from a null execute argument throws.
-    /// </summary>
+    /// <summary>Verifies that creating a parameterized task command from a null execute argument throws.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task CreateFromTask_WithParam_ThrowsOnNullExecute() =>
-        await Assert.ThrowsExactlyAsync<ArgumentNullException>(async () =>
+        await Assert.ThrowsExactlyAsync<ArgumentNullException>(static async () =>
         {
             _ = ReactiveCommand.CreateFromTask((Func<int, Task<string>>)null!);
             await Task.CompletedTask;
         });
 
-    /// <summary>
-    ///     Verifies that a background action command executes on the supplied background scheduler.
-    /// </summary>
+    /// <summary>Verifies that a background action command executes on the supplied background scheduler.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task CreateRunInBackground_Action_ExecutesOnBackgroundScheduler()
@@ -348,28 +311,24 @@ public partial class ReactiveCommandTest
         var executed = false;
         var command = ReactiveCommand.CreateRunInBackground(
             () => executed = true,
-            backgroundScheduler: ImmediateScheduler.Instance,
-            outputScheduler: ImmediateScheduler.Instance);
+            backgroundScheduler: Sequencer.Immediate,
+            outputScheduler: Sequencer.Immediate);
 
-        await command.Execute();
+        await command.Execute().FirstAsync();
         await Assert.That(executed).IsTrue();
     }
 
-    /// <summary>
-    ///     Verifies that creating a background action command from a null execute argument throws.
-    /// </summary>
+    /// <summary>Verifies that creating a background action command from a null execute argument throws.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task CreateRunInBackground_Action_ThrowsOnNullExecute() =>
-        await Assert.ThrowsExactlyAsync<ArgumentNullException>(async () =>
+        await Assert.ThrowsExactlyAsync<ArgumentNullException>(static async () =>
         {
             _ = ReactiveCommand.CreateRunInBackground(null!);
             await Task.CompletedTask;
         });
 
-    /// <summary>
-    ///     Verifies that a parameterized background action command receives the supplied parameter.
-    /// </summary>
+    /// <summary>Verifies that a parameterized background action command receives the supplied parameter.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task CreateRunInBackground_ActionWithParam_PassesParameter()
@@ -377,81 +336,71 @@ public partial class ReactiveCommandTest
         var receivedParam = 0;
         var command = ReactiveCommand.CreateRunInBackground<int>(
             param => receivedParam = param,
-            backgroundScheduler: ImmediateScheduler.Instance,
-            outputScheduler: ImmediateScheduler.Instance);
+            backgroundScheduler: Sequencer.Immediate,
+            outputScheduler: Sequencer.Immediate);
 
-        await command.Execute(ParameterValue);
+        await command.Execute(ParameterValue).FirstAsync();
         await Assert.That(receivedParam).IsEqualTo(ParameterValue);
     }
 
-    /// <summary>
-    ///     Verifies that creating a parameterized background action command from a null execute argument throws.
-    /// </summary>
+    /// <summary>Verifies that creating a parameterized background action command from a null execute argument throws.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task CreateRunInBackground_ActionWithParam_ThrowsOnNullExecute() =>
-        await Assert.ThrowsExactlyAsync<ArgumentNullException>(async () =>
+        await Assert.ThrowsExactlyAsync<ArgumentNullException>(static async () =>
         {
             _ = ReactiveCommand.CreateRunInBackground((Action<int>)null!);
             await Task.CompletedTask;
         });
 
-    /// <summary>
-    ///     Verifies that a background function command ticks its return value as a result.
-    /// </summary>
+    /// <summary>Verifies that a background function command ticks its return value as a result.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task CreateRunInBackground_Func_ReturnsResult()
     {
         var command = ReactiveCommand.CreateRunInBackground(
-            () => ParameterValue,
-            backgroundScheduler: ImmediateScheduler.Instance,
-            outputScheduler: ImmediateScheduler.Instance);
-        command.ToObservableChangeSet(ImmediateScheduler.Instance).Bind(out var results).Subscribe();
+            static () => ParameterValue,
+            backgroundScheduler: Sequencer.Immediate,
+            outputScheduler: Sequencer.Immediate);
+        var results = command.Collect();
 
-        await command.Execute();
+        await command.Execute().FirstAsync();
 
         await Assert.That(results[0]).IsEqualTo(ParameterValue);
     }
 
-    /// <summary>
-    ///     Verifies that creating a background function command from a null execute argument throws.
-    /// </summary>
+    /// <summary>Verifies that creating a background function command from a null execute argument throws.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task CreateRunInBackground_Func_ThrowsOnNullExecute() =>
-        await Assert.ThrowsExactlyAsync<ArgumentNullException>(async () =>
+        await Assert.ThrowsExactlyAsync<ArgumentNullException>(static async () =>
         {
             _ = ReactiveCommand.CreateRunInBackground((Func<int>)null!);
             await Task.CompletedTask;
         });
 
-    /// <summary>
-    ///     Verifies that creating a parameterized background function command from a null execute argument throws.
-    /// </summary>
+    /// <summary>Verifies that creating a parameterized background function command from a null execute argument throws.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task CreateRunInBackground_FuncWithParam_ThrowsOnNullExecute() =>
-        await Assert.ThrowsExactlyAsync<ArgumentNullException>(async () =>
+        await Assert.ThrowsExactlyAsync<ArgumentNullException>(static async () =>
         {
             _ = ReactiveCommand.CreateRunInBackground((Func<int, string>)null!);
             await Task.CompletedTask;
         });
 
-    /// <summary>
-    ///     Verifies that a parameterized background function command transforms the parameter into a result.
-    /// </summary>
+    /// <summary>Verifies that a parameterized background function command transforms the parameter into a result.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task CreateRunInBackground_FuncWithParam_TransformsParameter()
     {
         var command = ReactiveCommand.CreateRunInBackground<int, string>(
-            param => param.ToString(),
-            backgroundScheduler: ImmediateScheduler.Instance,
-            outputScheduler: ImmediateScheduler.Instance);
-        command.ToObservableChangeSet(ImmediateScheduler.Instance).Bind(out var results).Subscribe();
+            static param => param.ToString(),
+            backgroundScheduler: Sequencer.Immediate,
+            outputScheduler: Sequencer.Immediate);
+        var results = command.Collect();
 
-        await command.Execute(ParameterValue);
+        await command.Execute(ParameterValue).FirstAsync();
         await Assert.That(results[0]).IsEqualTo(ParameterValueString);
     }
 }

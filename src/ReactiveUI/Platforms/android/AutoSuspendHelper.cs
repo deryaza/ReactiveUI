@@ -1,19 +1,19 @@
-﻿// Copyright (c) 2009-2026 .NET Foundation and Contributors. All rights reserved.
+// Copyright (c) 2009-2026 .NET Foundation and Contributors. All rights reserved.
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
 
-using System.Reactive;
-using System.Reactive.Subjects;
-using ReactiveUI.Helpers;
+using System.Runtime.CompilerServices;
 using ReactiveUI.Internal;
+using ReactiveUI.Primitives.Disposables;
 using Splat;
 
+#if REACTIVE_SHIM
+namespace ReactiveUI.Reactive;
+#else
 namespace ReactiveUI;
-
-/// <summary>
-/// Helps manage android application lifecycle events.
-/// </summary>
+#endif
+/// <summary>Helps manage android application lifecycle events.</summary>
 /// <remarks>
 /// <para>
 /// Register this helper inside your <see cref="Application"/> subclass to translate Activity lifecycle callbacks into
@@ -29,12 +29,10 @@ namespace ReactiveUI;
 /// public class App : Application
 /// {
 ///     private AutoSuspendHelper? _autoSuspendHelper;
-///
 ///     public App(IntPtr handle, JniHandleOwnership ownership)
 ///         : base(handle, ownership)
 ///     {
 ///     }
-///
 ///     public override void OnCreate()
 ///     {
 ///         base.OnCreate();
@@ -47,41 +45,39 @@ namespace ReactiveUI;
 /// </code>
 /// </para>
 /// </remarks>
+[System.Diagnostics.DebuggerDisplay("AutoSuspendHelper")]
 public class AutoSuspendHelper : IEnableLogger, IDisposable
 {
     /// <summary>Relays Activity create callbacks along with the saved-state bundle.</summary>
-    private readonly BroadcastSubject<Bundle?> _onCreate = new();
+    private readonly Signal<Bundle?> _onCreate = new();
 
     /// <summary>Relays Activity resume callbacks.</summary>
-    private readonly BroadcastSubject<Unit> _onRestart = new();
+    private readonly Signal<RxVoid> _onRestart = new();
 
     /// <summary>Relays Activity pause callbacks.</summary>
-    private readonly BroadcastSubject<Unit> _onPause = new();
+    private readonly Signal<RxVoid> _onPause = new();
 
     /// <summary>Relays Activity save-instance-state callbacks along with the out bundle.</summary>
-    private readonly BroadcastSubject<Bundle?> _onSaveInstanceState = new();
+    private readonly Signal<Bundle?> _onSaveInstanceState = new();
 
     /// <summary>Tracks whether this instance has already been disposed.</summary>
-    private bool _disposedValue;
+    private int _disposedValue;
 
-    /// <summary>
-    /// Initializes static members of the <see cref="AutoSuspendHelper"/> class.
-    /// </summary>
+    /// <summary>Initializes static members of the <see cref="AutoSuspendHelper"/> class.</summary>
     static AutoSuspendHelper() => AppDomain.CurrentDomain.UnhandledException +=
-        static (_, _) => UntimelyDemise.OnNext(Unit.Default);
+        static (_, _) => UntimelyDemise.OnNext(RxVoid.Default);
 
-    /// <summary>
-    /// Initializes a new instance of the <see cref="AutoSuspendHelper"/> class.
-    /// </summary>
+    /// <summary>Initializes a new instance of the <see cref="AutoSuspendHelper"/> class.</summary>
     /// <param name="hostApplication">The host application.</param>
     public AutoSuspendHelper(Application hostApplication)
     {
         ArgumentExceptionHelper.ThrowIfNull(hostApplication);
-        hostApplication.RegisterActivityLifecycleCallbacks(new ObservableLifecycle(this));
+        hostApplication.RegisterActivityLifecycleCallbacks(
+            new ObservableLifecycle(_onCreate, _onRestart, _onPause, _onSaveInstanceState));
 
         // Both create and save-instance-state callbacks update the latest bundle (replaces a Merge + Subscribe).
-        _onCreate.Subscribe(new DelegateObserver<Bundle?>(static x => LatestBundle = x));
-        _onSaveInstanceState.Subscribe(new DelegateObserver<Bundle?>(static x => LatestBundle = x));
+        _ = _onCreate.Subscribe(new DelegateObserver<Bundle?>(static x => LatestBundle = x));
+        _ = _onSaveInstanceState.Subscribe(new DelegateObserver<Bundle?>(static x => LatestBundle = x));
 
         RxSuspension.SuspensionHost.IsLaunchingNew = new CreateSignalObservable(_onCreate, emitWhenNull: true);
         RxSuspension.SuspensionHost.IsResuming = new CreateSignalObservable(_onCreate, emitWhenNull: false);
@@ -90,14 +86,10 @@ public class AutoSuspendHelper : IEnableLogger, IDisposable
         RxSuspension.SuspensionHost.ShouldInvalidateState = UntimelyDemise;
     }
 
-    /// <summary>
-    /// Gets a subject to indicate whether the application has untimely dismissed.
-    /// </summary>
-    public static ISubject<Unit> UntimelyDemise { get; } = new BroadcastSubject<Unit>();
+    /// <summary>Gets a subject to indicate whether the application has untimely dismissed.</summary>
+    public static ISignal<RxVoid> UntimelyDemise { get; } = new Signal<RxVoid>();
 
-    /// <summary>
-    /// Gets or sets the latest bundle.
-    /// </summary>
+    /// <summary>Gets or sets the latest bundle.</summary>
     /// <remarks>
     /// Updated whenever <see cref="Activity.OnSaveInstanceState(Bundle)"/> runs so callers can detect whether
     /// <see cref="ObservableLifecycle.OnActivityCreated(Activity?, Bundle?)"/> represents a cold launch (<see langword="null"/>) or a
@@ -112,50 +104,40 @@ public class AutoSuspendHelper : IEnableLogger, IDisposable
         GC.SuppressFinalize(this);
     }
 
-    /// <summary>
-    /// Disposes of the items inside the class.
-    /// </summary>
+    /// <summary>Disposes of the items inside the class.</summary>
     /// <param name="disposing">If we are disposing of managed objects or not.</param>
     protected virtual void Dispose(bool disposing)
     {
-        if (_disposedValue)
+        if (Interlocked.Exchange(ref _disposedValue, 1) != 0 || !disposing)
         {
             return;
         }
 
-        if (disposing)
-        {
-            _onCreate.Dispose();
-            _onPause.Dispose();
-            _onRestart.Dispose();
-            _onSaveInstanceState.Dispose();
-        }
-
-        _disposedValue = true;
+        _onCreate.Dispose();
+        _onPause.Dispose();
+        _onRestart.Dispose();
+        _onSaveInstanceState.Dispose();
     }
 
     /// <summary>
-    /// Emits <see cref="Unit.Default"/> for each create callback whose saved-state bundle matches the requested
-    /// null-ness — replacing <c>_onCreate.Where(x =&gt; x is null/not null).Select(_ =&gt; Unit.Default)</c>.
+    /// Emits <see cref="RxVoid.Default"/> for each create callback whose saved-state bundle matches the requested
+    /// null-ness — replacing <c>_onCreate.Where(x =&gt; x is null/not null).Select(_ =&gt; RxVoid.Default)</c>.
     /// </summary>
     /// <param name="source">The create-callback stream carrying the saved-state bundle.</param>
     /// <param name="emitWhenNull">When true, emits for null bundles (cold launch); when false, for non-null bundles (resume).</param>
-    private sealed class CreateSignalObservable(IObservable<Bundle?> source, bool emitWhenNull) : IObservable<Unit>
+    private sealed class CreateSignalObservable(IObservable<Bundle?> source, bool emitWhenNull) : IObservable<RxVoid>
     {
         /// <inheritdoc/>
-        public IDisposable Subscribe(IObserver<Unit> observer)
+        public IDisposable Subscribe(IObserver<RxVoid> observer)
         {
             ArgumentExceptionHelper.ThrowIfNull(observer);
             return source.Subscribe(new Sink(observer, emitWhenNull));
         }
 
-        /// <summary>
-        /// Emits <see cref="Unit.Default"/> for each create callback whose saved-state bundle matches the requested
-        /// null-ness.
-        /// </summary>
-        /// <param name="downstream">The observer to receive the <see cref="Unit.Default"/> notifications.</param>
+        /// <summary>Emits <see cref="RxVoid.Default"/> for each create callback whose saved-state bundle matches the requested null-ness.</summary>
+        /// <param name="downstream">The observer to receive the <see cref="RxVoid.Default"/> notifications.</param>
         /// <param name="emitWhenNull">When true, emits for null bundles (cold launch); when false, for non-null bundles (resume).</param>
-        private sealed class Sink(IObserver<Unit> downstream, bool emitWhenNull) : IObserver<Bundle?>
+        private sealed class Sink(IObserver<RxVoid> downstream, bool emitWhenNull) : IObserver<Bundle?>
         {
             /// <inheritdoc/>
             public void OnNext(Bundle? value)
@@ -165,23 +147,22 @@ public class AutoSuspendHelper : IEnableLogger, IDisposable
                     return;
                 }
 
-                downstream.OnNext(Unit.Default);
+                downstream.OnNext(RxVoid.Default);
             }
 
             /// <inheritdoc/>
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public void OnError(Exception error) => downstream.OnError(error);
 
             /// <inheritdoc/>
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public void OnCompleted() => downstream.OnCompleted();
         }
     }
 
-    /// <summary>
-    /// Emits an empty disposable for each pause callback — replacing <c>_onPause.Select(_ =&gt; Disposable.Empty)</c>
-    /// to feed <see cref="ISuspensionHost.ShouldPersistState"/>.
-    /// </summary>
+    /// <summary>Emits an empty disposable for each pause callback — replacing <c>_onPause.Select(_ =&gt; Disposable.Empty)</c> to feed <see cref="ISuspensionHost.ShouldPersistState"/>.</summary>
     /// <param name="source">The pause-callback stream.</param>
-    private sealed class PersistSignalObservable(IObservable<Unit> source) : IObservable<IDisposable>
+    private sealed class PersistSignalObservable(IObservable<RxVoid> source) : IObservable<IDisposable>
     {
         /// <inheritdoc/>
         public IDisposable Subscribe(IObserver<IDisposable> observer)
@@ -190,19 +171,20 @@ public class AutoSuspendHelper : IEnableLogger, IDisposable
             return source.Subscribe(new Sink(observer));
         }
 
-        /// <summary>
-        /// Emits an empty disposable for each pause callback.
-        /// </summary>
+        /// <summary>Emits an empty disposable for each pause callback.</summary>
         /// <param name="downstream">The downstream observer.</param>
-        private sealed class Sink(IObserver<IDisposable> downstream) : IObserver<Unit>
+        private sealed class Sink(IObserver<IDisposable> downstream) : IObserver<RxVoid>
         {
             /// <inheritdoc/>
-            public void OnNext(Unit value) => downstream.OnNext(EmptyDisposable.Instance);
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public void OnNext(RxVoid value) => downstream.OnNext(EmptyDisposable.Instance);
 
             /// <inheritdoc/>
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public void OnError(Exception error) => downstream.OnError(error);
 
             /// <inheritdoc/>
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public void OnCompleted() => downstream.OnCompleted();
         }
     }
@@ -211,30 +193,39 @@ public class AutoSuspendHelper : IEnableLogger, IDisposable
     /// Handles Android activity lifecycle events and forwards them to the associated AutoSuspendHelper instance for
     /// reactive processing.
     /// </summary>
+    /// <param name="onCreate">Relays Activity create callbacks along with the saved-state bundle.</param>
+    /// <param name="onRestart">Relays Activity resume callbacks.</param>
+    /// <param name="onPause">Relays Activity pause callbacks.</param>
+    /// <param name="onSaveInstanceState">Relays Activity save-instance-state callbacks along with the out bundle.</param>
     /// <remarks>This class implements the Application.IActivityLifecycleCallbacks interface to observe
     /// activity lifecycle changes. It is intended for internal use to bridge Android lifecycle events to reactive
     /// streams managed by AutoSuspendHelper.</remarks>
-    /// <param name="this">The AutoSuspendHelper instance that receives lifecycle event notifications.</param>
-    private sealed class ObservableLifecycle(AutoSuspendHelper @this)
-        : Java.Lang.Object, Application.IActivityLifecycleCallbacks
+    private sealed class ObservableLifecycle(
+        Signal<Bundle?> onCreate,
+        Signal<RxVoid> onRestart,
+        Signal<RxVoid> onPause,
+        Signal<Bundle?> onSaveInstanceState) : Java.Lang.Object, Application.IActivityLifecycleCallbacks
     {
         /// <inheritdoc/>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void OnActivityCreated(Activity? activity, Bundle? savedInstanceState) =>
-            @this._onCreate.OnNext(savedInstanceState);
+            onCreate.OnNext(savedInstanceState);
 
         /// <inheritdoc/>
-        public void OnActivityResumed(Activity? activity) => @this._onRestart.OnNext(Unit.Default);
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void OnActivityResumed(Activity? activity) => onRestart.OnNext(RxVoid.Default);
 
         /// <inheritdoc/>
         public void OnActivitySaveInstanceState(Activity? activity, Bundle? outState)
         {
             outState?.PutString("___dummy_value_please_create_a_bundle", "VeryYes");
 
-            @this._onSaveInstanceState.OnNext(outState);
+            onSaveInstanceState.OnNext(outState);
         }
 
         /// <inheritdoc/>
-        public void OnActivityPaused(Activity? activity) => @this._onPause.OnNext(Unit.Default);
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void OnActivityPaused(Activity? activity) => onPause.OnNext(RxVoid.Default);
 
         /// <inheritdoc/>
         public void OnActivityDestroyed(Activity? activity)

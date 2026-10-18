@@ -4,15 +4,19 @@
 // See the LICENSE file in the project root for full license information.
 
 using System.ComponentModel;
-using System.Reactive;
-using System.Reactive.Disposables;
 using ReactiveUI.Internal;
 
 #if IS_WINUI
 using Microsoft.UI.Xaml;
+using ReactiveUI.Primitives;
+using Splat;
 #endif
 
+#if REACTIVE_SHIM
+namespace ReactiveUI.Reactive.Maui.Internal;
+#else
 namespace ReactiveUI.Maui.Internal;
+#endif
 
 /// <summary>
 /// Internal helper methods for reactive operations in MAUI controls.
@@ -26,27 +30,27 @@ internal static class MauiReactiveHelpers
     /// </summary>
     /// <param name="source">The object to observe.</param>
     /// <param name="propertyName">The name of the property to observe (use nameof()).</param>
-    /// <returns>An observable that emits Unit when the property changes.</returns>
+    /// <returns>An observable that emits RxVoid when the property changes.</returns>
     /// <remarks>
     /// This method uses Observable.Create for better performance compared to Observable.FromEvent.
     /// It filters PropertyChanged events to only emit when the specified property changes.
     /// </remarks>
-    public static IObservable<Unit> CreatePropertyChangedPulse(INotifyPropertyChanged source, string propertyName)
+    internal static IObservable<RxVoid> CreatePropertyChangedPulse(INotifyPropertyChanged source, string propertyName)
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(propertyName);
 
-        return new FromEventObservable<Unit>(onNext =>
+        return new FromEventObservable<RxVoid>(onNext =>
         {
-            void Handler(object? sender, PropertyChangedEventArgs e)
+            void Handler(object? _, PropertyChangedEventArgs e)
             {
-                if (!string.IsNullOrEmpty(e.PropertyName) &&
-                    !string.Equals(e.PropertyName, propertyName, StringComparison.Ordinal))
+                if (!string.IsNullOrEmpty(e.PropertyName)
+                    && !string.Equals(e.PropertyName, propertyName, StringComparison.Ordinal))
                 {
                     return;
                 }
 
-                onNext(Unit.Default);
+                onNext(RxVoid.Default);
             }
 
             source.PropertyChanged += Handler;
@@ -68,7 +72,7 @@ internal static class MauiReactiveHelpers
     /// The observable immediately emits the current value upon subscription, then emits whenever the property changes.
     /// This overload works with any INotifyPropertyChanged implementation and is available for MAUI.
     /// </remarks>
-    public static IObservable<T> CreatePropertyValueObservable<T>(
+    internal static IObservable<T> CreatePropertyValueObservable<T>(
         INotifyPropertyChanged source,
         string propertyName,
         Func<T> getPropertyValue)
@@ -82,10 +86,10 @@ internal static class MauiReactiveHelpers
             // Emit initial value
             onNext(getPropertyValue());
 
-            void Handler(object? sender, PropertyChangedEventArgs e)
+            void Handler(object? _, PropertyChangedEventArgs e)
             {
-                if (!string.IsNullOrEmpty(e.PropertyName) &&
-                    !string.Equals(e.PropertyName, propertyName, StringComparison.Ordinal))
+                if (!string.IsNullOrEmpty(e.PropertyName)
+                    && !string.Equals(e.PropertyName, propertyName, StringComparison.Ordinal))
                 {
                     return;
                 }
@@ -113,7 +117,7 @@ internal static class MauiReactiveHelpers
     /// This provides an AOT-friendly alternative to WhenAnyValue by avoiding expression trees and reflection.
     /// The observable immediately emits the current value upon subscription, then emits whenever the property changes.
     /// </remarks>
-    public static IObservable<T> CreatePropertyValueObservable<T>(
+    internal static IObservable<T> CreatePropertyValueObservable<T>(
         DependencyObject source,
         string propertyName,
         DependencyProperty property,
@@ -135,28 +139,179 @@ internal static class MauiReactiveHelpers
             return new ActionDisposable(() => source.UnregisterPropertyChangedCallback(property, token));
         });
     }
+
+    /// <summary>Initializes a WinUI routed host and its view-contract subscriptions.</summary>
+    /// <typeparam name="THost">The routed-host type.</typeparam>
+    /// <param name="host">The host to initialize.</param>
+    /// <param name="routerProperty">The host's router dependency property.</param>
+    /// <param name="viewContractObservableProperty">The host's view-contract observable dependency property.</param>
+    /// <param name="subscriptions">Collects the host subscription.</param>
+    /// <param name="resolveView">Resolves a routed view model and contract.</param>
+    internal static void InitializeRoutedViewHost<THost>(
+        THost host,
+        DependencyProperty routerProperty,
+        DependencyProperty viewContractObservableProperty,
+        MultipleDisposable subscriptions,
+        Action<(IRoutableViewModel? ViewModel, string? Contract)> resolveView)
+        where THost : FrameworkElement, IMauiRoutedViewHost
+    {
+        host.ViewContractObservable = CreateViewContractObservable(host, host.Log());
+        SubscribeRoutedViewHost(
+            host,
+            (nameof(host.Router), routerProperty, () => host.Router),
+            (nameof(host.ViewContractObservable), viewContractObservableProperty, () => host.ViewContractObservable),
+            () => host.ViewContract,
+            host.SetObservedViewContract,
+            resolveView,
+            subscriptions);
+    }
+
+    /// <summary>Initializes a WinUI view-model host and its view-contract subscriptions.</summary>
+    /// <typeparam name="TViewModel">The hosted view-model type.</typeparam>
+    /// <param name="host">The host, logger, and view-contract setter.</param>
+    /// <param name="viewModel">The view-model property metadata and accessor.</param>
+    /// <param name="viewContractObservable">The view-contract observable property metadata and accessor.</param>
+    /// <param name="setViewContract">Stores the latest view contract.</param>
+    /// <param name="resolveView">Resolves a view model and contract.</param>
+    /// <param name="subscriptions">Collects the host subscriptions.</param>
+    internal static void InitializeViewModelViewHost<TViewModel>(
+        (FrameworkElement Source, IFullLogger Logger, Action<IObservable<string?>> SetViewContractObservable) host,
+        (string Name, DependencyProperty Property, Func<TViewModel?> GetValue) viewModel,
+        (string Name, DependencyProperty Property, Func<IObservable<string?>> GetValue) viewContractObservable,
+        Action<string?> setViewContract,
+        Action<TViewModel?, string?> resolveView,
+        MultipleDisposable subscriptions)
+    {
+        host.SetViewContractObservable(CreateViewContractObservable(host.Source, host.Logger));
+        SubscribeViewModelViewHost(host.Source, viewModel, viewContractObservable, setViewContract, resolveView, subscriptions);
+    }
+
+    /// <summary>Subscribes a WinUI routed host to its router and view-contract properties.</summary>
+    /// <param name="source">The host dependency object.</param>
+    /// <param name="router">The router property metadata and accessor.</param>
+    /// <param name="viewContractObservable">The view-contract observable property metadata and accessor.</param>
+    /// <param name="getViewContract">Gets the current view contract.</param>
+    /// <param name="setViewContract">Stores the latest view contract.</param>
+    /// <param name="resolveView">Resolves a routed view model and contract.</param>
+    /// <param name="subscriptions">Collects the host subscription.</param>
+    internal static void SubscribeRoutedViewHost(
+        DependencyObject source,
+        (string Name, DependencyProperty Property, Func<RoutingState> GetValue) router,
+        (string Name, DependencyProperty Property, Func<IObservable<string?>> GetValue) viewContractObservable,
+        Func<string?> getViewContract,
+        Action<string?> setViewContract,
+        Action<(IRoutableViewModel? ViewModel, string? Contract)> resolveView,
+        MultipleDisposable subscriptions)
+    {
+        var routerChanged = CreatePropertyValueObservable(source, router.Name, router.Property, router.GetValue);
+        var viewContractObservableChanged = CreatePropertyValueObservable(
+            source,
+            viewContractObservable.Name,
+            viewContractObservable.Property,
+            viewContractObservable.GetValue);
+        var currentViewModel = new StartWithObservable<IRoutableViewModel?>(
+            new KeepSignal<RoutingState?>(routerChanged, static router => router is not null)
+                .SelectMany(static router => router!.CurrentViewModel),
+            null);
+        var viewContract = new StartWithObservable<string?>(
+            viewContractObservableChanged
+                .SwitchMap(static observable => observable ?? Signal.Emit<string?>(null))
+                .Do(setViewContract),
+            getViewContract());
+
+        _ = currentViewModel
+            .CombineLatest(viewContract, static (viewModel, contract) => (viewModel, contract))
+            .DistinctUntilChanged()
+            .Subscribe(new DelegateObserver<(IRoutableViewModel? ViewModel, string? Contract)>(
+                resolveView,
+                RxState.DefaultExceptionHandler.OnNext))
+            .DisposeWith(subscriptions);
+    }
+
+    /// <summary>Subscribes a WinUI view-model host to its view model and contract.</summary>
+    /// <typeparam name="TViewModel">The hosted view-model type.</typeparam>
+    /// <param name="source">The host dependency object.</param>
+    /// <param name="viewModel">The view-model property metadata and accessor.</param>
+    /// <param name="viewContractObservable">The view-contract observable property metadata and accessor.</param>
+    /// <param name="setViewContract">Stores the latest view contract.</param>
+    /// <param name="resolveView">Resolves a view model and contract.</param>
+    /// <param name="subscriptions">Collects the host subscriptions.</param>
+    /// <remarks>
+    /// The host follows whichever contract stream its view-contract observable property holds, so a contract set
+    /// after construction (including through <c>ViewContract</c>) resolves the view again.
+    /// </remarks>
+    internal static void SubscribeViewModelViewHost<TViewModel>(
+        DependencyObject source,
+        (string Name, DependencyProperty Property, Func<TViewModel?> GetValue) viewModel,
+        (string Name, DependencyProperty Property, Func<IObservable<string?>> GetValue) viewContractObservable,
+        Action<string?> setViewContract,
+        Action<TViewModel?, string?> resolveView,
+        MultipleDisposable subscriptions)
+    {
+        var viewModelChanged = CreatePropertyValueObservable(
+            source,
+            viewModel.Name,
+            viewModel.Property,
+            viewModel.GetValue);
+        var viewContract = CreatePropertyValueObservable(
+                source,
+                viewContractObservable.Name,
+                viewContractObservable.Property,
+                viewContractObservable.GetValue)
+            .SwitchMap(static observable => observable ?? Signal.Emit<string?>(null));
+        var viewModelAndContract = viewContract
+            .Do(setViewContract)
+            .CombineLatest(viewModelChanged, static (contract, viewModel) => (viewModel, contract));
+
+        _ = new ObserveOnObservable<string?>(viewContract, RxSchedulers.MainThreadScheduler)
+            .Subscribe(new DelegateObserver<string?>(contract => setViewContract(contract ?? string.Empty)))
+            .DisposeWith(subscriptions);
+        _ = viewModelAndContract
+            .DistinctUntilChanged()
+            .Subscribe(new DelegateObserver<(TViewModel? ViewModel, string? Contract)>(
+                pair => resolveView(pair.ViewModel, pair.Contract)))
+            .DisposeWith(subscriptions);
+    }
+
 #endif
 
-    /// <summary>
-    /// Wires up activation for a view model that supports activation.
-    /// </summary>
+    /// <summary>Wires up activation for a view model that supports activation.</summary>
     /// <param name="viewModel">The view model to activate.</param>
     /// <param name="activatedSignal">Observable that signals when the view is activated.</param>
     /// <param name="deactivatedSignal">Observable that signals when the view is deactivated.</param>
     /// <returns>A disposable that manages the activation subscriptions.</returns>
-    public static IDisposable WireActivationIfSupported(
+    internal static IDisposable WireActivationIfSupported(
         object? viewModel,
-        IObservable<Unit> activatedSignal,
-        IObservable<Unit> deactivatedSignal)
+        IObservable<RxVoid> activatedSignal,
+        IObservable<RxVoid> deactivatedSignal)
     {
         if (viewModel is not IActivatableViewModel activatable)
         {
             return EmptyDisposable.Instance;
         }
 
-        var activatedSub = activatedSignal.Subscribe(new DelegateObserver<Unit>(_ => activatable.Activator.Activate()));
-        var deactivatedSub = deactivatedSignal.Subscribe(new DelegateObserver<Unit>(_ => activatable.Activator.Deactivate()));
+        var activatedSub = activatedSignal.Subscribe(new DelegateObserver<RxVoid>(_ => activatable.Activator.Activate()));
+        var deactivatedSub = deactivatedSignal.Subscribe(new DelegateObserver<RxVoid>(_ => activatable.Activator.Deactivate()));
 
-        return new CompositeDisposable(activatedSub, deactivatedSub);
+        return new MultipleDisposable(activatedSub, deactivatedSub);
     }
+
+#if IS_WINUI
+    /// <summary>Creates a WinUI view-contract stream from platform orientation and size changes.</summary>
+    /// <param name="source">The host element.</param>
+    /// <param name="logger">The host logger.</param>
+    /// <returns>The view-contract stream.</returns>
+    private static IObservable<string?> CreateViewContractObservable(FrameworkElement source, IFullLogger logger)
+    {
+        var platformGetter = ViewContractObservableHelpers.GetPlatformOrientation(logger);
+        return ViewContractObservableHelpers.Create(
+            platformGetter,
+            new FromEventObservable<string?>(onNext =>
+            {
+                SizeChangedEventHandler handler = (_, _) => onNext(platformGetter());
+                source.SizeChanged += handler;
+                return new ActionDisposable(() => source.SizeChanged -= handler);
+            }));
+    }
+#endif
 }

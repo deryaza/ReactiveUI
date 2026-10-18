@@ -1,0 +1,6 @@
+<Project>
+  <!-- Import the WPF binding types' namespace when the consumer enables implicit usings. -->
+  <ItemGroup Condition="'$(ImplicitUsings)' == 'true' Or '$(ImplicitUsings)' == 'enable'">
+    <Using Include="ReactiveUI.Binding.Reactive.Wpf" />
+  </ItemGroup>
+</Project>

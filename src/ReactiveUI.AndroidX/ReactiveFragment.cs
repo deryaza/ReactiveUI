@@ -5,54 +5,68 @@
 
 using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
-using System.Reactive;
-using ReactiveUI.Internal;
+using System.Runtime.CompilerServices;
 
+#if REACTIVE_SHIM
+namespace ReactiveUI.Reactive.AndroidX;
+#else
 namespace ReactiveUI.AndroidX;
-
-/// <summary>
-/// This is a Fragment that is both an Activity and has ReactiveObject powers
-/// (i.e. you can call RaiseAndSetIfChanged).
-/// </summary>
+#endif
+/// <summary>This is a Fragment that is both an Activity and has ReactiveObject powers (i.e. you can call RaiseAndSetIfChanged).</summary>
 [ExcludeFromCodeCoverage]
+[System.Diagnostics.DebuggerDisplay("{Activated}, {Deactivated}")]
 public class ReactiveFragment : global::AndroidX.Fragment.App.Fragment,
     IReactiveNotifyPropertyChanged<ReactiveFragment>, IReactiveObject, IHandleObservableErrors
 {
-    /// <summary>
-    /// The subject that signals when the fragment is activated.
-    /// </summary>
-    private readonly BroadcastSubject<Unit> _activated = new();
+    /// <summary>The subject that signals when the fragment is activated.</summary>
+    private readonly Signal<RxVoid> _activated = new();
 
-    /// <summary>
-    /// The subject that signals when the fragment is deactivated.
-    /// </summary>
-    private readonly BroadcastSubject<Unit> _deactivated = new();
+    /// <summary>The subject that signals when the fragment is deactivated.</summary>
+    private readonly Signal<RxVoid> _deactivated = new();
 
-    /// <summary>
-    /// Initializes a new instance of the <see cref="ReactiveFragment"/> class.
-    /// </summary>
+    /// <summary>The <see cref="INotifyPropertyChanging.PropertyChanging"/> handlers; subscribing enables the classic event.</summary>
+    private PropertyChangingEventHandler? _propertyChanging;
+
+    /// <summary>The <see cref="INotifyPropertyChanged.PropertyChanged"/> handlers; subscribing enables the classic event.</summary>
+    private PropertyChangedEventHandler? _propertyChanged;
+
+    /// <summary>Initializes a new instance of the <see cref="ReactiveFragment"/> class.</summary>
     protected ReactiveFragment()
     {
     }
 
     /// <inheritdoc/>
-    public event PropertyChangingEventHandler? PropertyChanging;
+    public event PropertyChangingEventHandler? PropertyChanging
+    {
+        add
+        {
+            this.SubscribePropertyChangingEvents();
+            _propertyChanging += value;
+        }
+
+        remove => _propertyChanging -= value;
+    }
 
     /// <inheritdoc/>
-    public event PropertyChangedEventHandler? PropertyChanged;
+    public event PropertyChangedEventHandler? PropertyChanged
+    {
+        add
+        {
+            this.SubscribePropertyChangedEvents();
+            _propertyChanged += value;
+        }
+
+        remove => _propertyChanged -= value;
+    }
 
     /// <inheritdoc/>
     public IObservable<Exception> ThrownExceptions => this.GetThrownExceptionsObservable();
 
-    /// <summary>
-    /// Gets a signal when the fragment is activated.
-    /// </summary>
-    public IObservable<Unit> Activated => _activated;
+    /// <summary>Gets a signal when the fragment is activated.</summary>
+    public IObservable<RxVoid> Activated => _activated;
 
-    /// <summary>
-    /// Gets a signal when the fragment is deactivated.
-    /// </summary>
-    public IObservable<Unit> Deactivated => _deactivated;
+    /// <summary>Gets a signal when the fragment is deactivated.</summary>
+    public IObservable<RxVoid> Deactivated => _deactivated;
 
     /// <inheritdoc />
     public IObservable<IReactivePropertyChangedEventArgs<ReactiveFragment>> Changing => this.GetChangingObservable();
@@ -61,37 +75,35 @@ public class ReactiveFragment : global::AndroidX.Fragment.App.Fragment,
     public IObservable<IReactivePropertyChangedEventArgs<ReactiveFragment>> Changed => this.GetChangedObservable();
 
     /// <inheritdoc/>
-    void IReactiveObject.RaisePropertyChanging(PropertyChangingEventArgs args) => PropertyChanging?.Invoke(this, args);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    void IReactiveObject.RaisePropertyChanging(PropertyChangingEventArgs args) => _propertyChanging?.Invoke(this, args);
 
     /// <inheritdoc/>
-    void IReactiveObject.RaisePropertyChanged(PropertyChangedEventArgs args) => PropertyChanged?.Invoke(this, args);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    void IReactiveObject.RaisePropertyChanged(PropertyChangedEventArgs args) => _propertyChanged?.Invoke(this, args);
 
     /// <inheritdoc />
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public IDisposable SuppressChangeNotifications() => IReactiveObjectExtensions.SuppressChangeNotifications(this);
 
     /// <inheritdoc/>
     public override void OnPause()
     {
         base.OnPause();
-        _deactivated.OnNext(Unit.Default);
+        ActivationSignals.Raise(_deactivated);
     }
 
     /// <inheritdoc/>
     public override void OnResume()
     {
         base.OnResume();
-        _activated.OnNext(Unit.Default);
+        ActivationSignals.Raise(_activated);
     }
 
     /// <inheritdoc/>
     protected override void Dispose(bool disposing)
     {
-        if (disposing)
-        {
-            _activated.Dispose();
-            _deactivated.Dispose();
-        }
-
+        ActivationSignals.DisposeWhen(disposing, _activated, _deactivated);
         base.Dispose(disposing);
     }
 }

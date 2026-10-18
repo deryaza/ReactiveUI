@@ -3,10 +3,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
 
-using System.Reactive.Concurrency;
 using System.Runtime.Versioning;
-using System.Windows.Threading;
-using ReactiveUI.Builder;
 using ReactiveUI.Tests.Utilities.AppBuilder;
 
 namespace ReactiveUI.Tests.Wpf;
@@ -26,42 +23,38 @@ namespace ReactiveUI.Tests.Wpf;
 /// concurrent modifications to shared state.
 /// </remarks>
 [SupportedOSPlatform("windows")]
-public class WpfTestExecutor : STAThreadExecutor
+public class WpfTestExecutor : DispatcherThreadExecutor
 {
-    /// <summary>
-    /// Helper that manages app builder setup and teardown for the test.
-    /// </summary>
+    /// <summary>Helper that manages app builder setup and teardown for the test.</summary>
     private readonly AppBuilderTestHelper _helper = new();
 
     /// <inheritdoc/>
-    protected override void Initialize()
+    protected override void SetUp()
     {
-        base.Initialize();
+        base.SetUp();
 
-        _helper.Initialize(builder =>
+        _helper.Initialize(static builder =>
         {
             // Include WPF platform services to ensure view locator, activation, etc. work.
-            builder
+            _ = builder
                 .WithWpf()
                 .WithCoreServices();
         });
 
-        // Configure the WPF scheduler AFTER BuildApp. WithWpf() registers the lazy WpfMainThreadScheduler
-        // (WaitForDispatcherScheduler(() => DispatcherScheduler.Current)) and BuildApp applies it to
-        // RxSchedulers.MainThreadScheduler, so setting it inside the builder callback would be overwritten. The lazy
-        // scheduler resolves its dispatcher on whichever thread first schedules, so a background-thread binding
-        // update (e.g. via Task.Run) would resolve to the pool thread's dispatcher, which DispatcherUtilities.DoEvents
-        // never pumps. Binding this executor's dedicated STA dispatcher concretely keeps marshalled work on the
-        // dispatcher the test pumps. Initialize and the test body run on the same dedicated thread (see
-        // DedicatedThreadExecutor), so Dispatcher.CurrentDispatcher here is that thread's dispatcher.
-        RxSchedulers.MainThreadScheduler = new DispatcherScheduler(Dispatcher.CurrentDispatcher);
-        RxSchedulers.TaskpoolScheduler = TaskPoolScheduler.Default;
+        // Configure the WPF scheduler AFTER BuildApp. WithWpf() registers DispatcherSequencer.Main and BuildApp
+        // applies it to RxSchedulers.MainThreadScheduler, so setting it inside the builder callback would be
+        // overwritten. Main is process-wide and binds to the application's dispatcher once any test creates an
+        // Application, which DispatcherUtilities.DoEvents on this thread never pumps. Binding this executor's
+        // dedicated STA dispatcher keeps marshalled work on the dispatcher the test pumps. SetUp and the test body
+        // run on the same dedicated thread (see DispatcherThreadExecutor).
+        RxSchedulers.MainThreadScheduler = DispatcherSequencer.Current;
+        RxSchedulers.TaskpoolScheduler = TaskPoolSequencer.Default;
     }
 
     /// <inheritdoc/>
-    protected override void CleanUp()
+    protected override void TearDown()
     {
         _helper.CleanUp();
-        base.CleanUp();
+        base.TearDown();
     }
 }

@@ -3,7 +3,13 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
 
+using System.Diagnostics;
+
+#if REACTIVE_SHIM
+namespace ReactiveUI.Reactive.Winforms;
+#else
 namespace ReactiveUI.Winforms;
+#endif
 
 /// <summary>
 /// This is an  UserControl that is both and UserControl and has a ReactiveObject powers
@@ -11,19 +17,16 @@ namespace ReactiveUI.Winforms;
 /// </summary>
 /// <seealso cref="UserControl" />
 /// <seealso cref="IViewFor" />
+[DebuggerDisplay("ReactiveUserControlNonGeneric")]
 public partial class ReactiveUserControlNonGeneric : UserControl, IViewFor
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="ReactiveUserControlNonGeneric"/> class.
-    /// </summary>
+    /// <summary>Initializes a new instance of the <see cref="ReactiveUserControlNonGeneric"/> class.</summary>
     public ReactiveUserControlNonGeneric() => InitializeComponent();
 
     /// <inheritdoc/>
     object? IViewFor.ViewModel { get; set; }
 
-    /// <summary>
-    /// Clean up any resources being used.
-    /// </summary>
+    /// <summary>Clean up any resources being used.</summary>
     /// <param name="disposing">true if managed resources should be disposed; otherwise, false.</param>
     protected override void Dispose(bool disposing)
     {

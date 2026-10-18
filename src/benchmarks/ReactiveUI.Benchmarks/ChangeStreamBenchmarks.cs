@@ -3,6 +3,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
 
+using System.Diagnostics;
 using BenchmarkDotNet.Attributes;
 
 namespace ReactiveUI.Benchmarks;
@@ -13,6 +14,7 @@ namespace ReactiveUI.Benchmarks;
 /// </summary>
 [MemoryDiagnoser]
 [MarkdownExporterAttribute.GitHub]
+[DebuggerDisplay("ChangeStreamBenchmarks")]
 public class ChangeStreamBenchmarks
 {
     /// <summary>The number of property changes pushed per benchmark invocation.</summary>
@@ -40,8 +42,8 @@ public class ChangeStreamBenchmarks
     [GlobalSetup]
     public void Setup()
     {
-        _changedViewModel = new BenchmarkViewModel();
-        _changingViewModel = new BenchmarkViewModel();
+        _changedViewModel = new();
+        _changingViewModel = new();
         _changedSubscription = _changedViewModel.Changed.Subscribe(_changedSink);
         _changingSubscription = _changingViewModel.Changing.Subscribe(_changingSink);
     }

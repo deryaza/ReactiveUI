@@ -1,0 +1,7 @@
+<Project>
+  <!-- Import the binding engine's namespaces when the consumer enables implicit usings. -->
+  <ItemGroup Condition="'$(ImplicitUsings)' == 'true' Or '$(ImplicitUsings)' == 'enable'">
+    <Using Include="ReactiveUI.Binding.Reactive" />
+    <Using Include="ReactiveUI.Binding.Reactive.ObservableForProperty" />
+  </ItemGroup>
+</Project>

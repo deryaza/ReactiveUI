@@ -3,15 +3,14 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
 
-using System.Reactive.Concurrency;
-using ReactiveUI.Helpers;
 using Splat;
 
+#if REACTIVE_SHIM
+namespace ReactiveUI.Reactive;
+#else
 namespace ReactiveUI;
-
-/// <summary>
-/// Android platform registrations.
-/// </summary>
+#endif
+/// <summary>Android platform registrations.</summary>
 /// <seealso cref="IWantsToRegisterStuff" />
 public class PlatformRegistrations : IWantsToRegisterStuff
 {
@@ -21,14 +20,11 @@ public class PlatformRegistrations : IWantsToRegisterStuff
         ArgumentExceptionHelper.ThrowIfNull(registrar);
 
         registrar.RegisterConstant<IPlatformOperations>(static () => new PlatformOperations());
-        registrar.RegisterConstant<IBindingFallbackConverter>(static () => new ComponentModelFallbackConverter());
-        registrar.RegisterConstant<ICreatesObservableForProperty>(static () => new AndroidObservableForWidgets());
-        registrar.RegisterConstant<ICreatesCommandBinding>(static () => new AndroidCommandBinders());
 
         if (!ModeDetector.InUnitTestRunner())
         {
-            RxSchedulers.TaskpoolScheduler = TaskPoolScheduler.Default;
-            RxSchedulers.MainThreadScheduler = HandlerScheduler.MainThreadScheduler;
+            RxSchedulers.TaskpoolScheduler = TaskPoolSequencer.Default;
+            RxSchedulers.MainThreadScheduler = HandlerSequencer.Main;
         }
 
         registrar.RegisterConstant<ISuspensionDriver>(static () => new BundleSuspensionDriver());

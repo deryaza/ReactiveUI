@@ -3,40 +3,39 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
 
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
-using Microsoft.Maui.Controls;
 
+#if REACTIVE_SHIM
+namespace ReactiveUI.Reactive.Maui;
+#else
 namespace ReactiveUI.Maui;
+#endif
 
-/// <summary>
-/// This is an <see cref="MultiPage{T}"/> that is also an <see cref="IViewFor{TViewModel}"/>.
-/// </summary>
+/// <summary>This is an <see cref="MultiPage{T}"/> that is also an <see cref="IViewFor{TViewModel}"/>.</summary>
 /// <typeparam name="TPage">The type of the page.</typeparam>
 /// <typeparam name="TViewModel">The type of the view model.</typeparam>
 /// <seealso cref="MultiPage{T}" />
 /// <seealso cref="IViewFor{TViewModel}" />
+[DebuggerDisplay("{ViewModel}")]
 public abstract class ReactiveMultiPage<
-    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor |
-                                DynamicallyAccessedMemberTypes.PublicMethods |
-                                DynamicallyAccessedMemberTypes.PublicProperties)]
-    TPage,
+    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor
+                                | DynamicallyAccessedMemberTypes.PublicMethods
+                                | DynamicallyAccessedMemberTypes.PublicProperties)]
+TPage,
     [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor)] TViewModel> :
     MultiPage<TPage>, IViewFor<TViewModel>
     where TPage : Page
     where TViewModel : class
 {
-    /// <summary>
-    /// The view model bindable property.
-    /// </summary>
+    /// <summary>The view model bindable property.</summary>
     public static readonly BindableProperty ViewModelProperty = BindableProperty.Create(
         nameof(ViewModel),
         typeof(TViewModel),
         typeof(ReactiveMultiPage<TPage, TViewModel>),
         propertyChanged: OnViewModelChanged);
 
-    /// <summary>
-    /// Gets or sets the ViewModel to display.
-    /// </summary>
+    /// <summary>Gets or sets the ViewModel to display.</summary>
     public TViewModel? ViewModel
     {
         get => (TViewModel)GetValue(ViewModelProperty);
@@ -57,12 +56,10 @@ public abstract class ReactiveMultiPage<
         ViewModel = BindingContext as TViewModel;
     }
 
-    /// <summary>
-    /// Updates the binding context when the view model changes.
-    /// </summary>
+    /// <summary>Updates the binding context when the view model changes.</summary>
     /// <param name="bindableObject">The bindable object whose property changed.</param>
-    /// <param name="oldValue">The previous value.</param>
+    /// <param name="_">The previous value.</param>
     /// <param name="newValue">The new value.</param>
-    private static void OnViewModelChanged(BindableObject bindableObject, object oldValue, object newValue) =>
+    private static void OnViewModelChanged(BindableObject bindableObject, object _, object newValue) =>
         bindableObject.BindingContext = newValue;
 }

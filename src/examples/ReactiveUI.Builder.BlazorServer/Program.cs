@@ -13,23 +13,23 @@ using Splat.Microsoft.Extensions.DependencyInjection;
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
-builder.Services.AddRazorComponents()
+_ = builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
-builder.Services.AddHostedService<ReactiveUiAppHostedService>();
+_ = builder.Services.AddHostedService<ReactiveUiAppHostedService>();
 
 // Per-circuit (per tab) screen/bootstrapper:
-builder.Services.AddScoped<IScreen, AppBootstrapper>();
+_ = builder.Services.AddScoped<IScreen, AppBootstrapper>();
 
-builder.Services.AddSingleton<AppLifetimeCoordinator>();
+_ = builder.Services.AddSingleton<AppLifetimeCoordinator>();
 
 // This line connects Splat and standard Microsoft DI together
 builder.Services.UseMicrosoftDependencyResolver();
 
-RxAppBuilder.CreateReactiveUIBuilder()
+_ = RxAppBuilder.CreateReactiveUIBuilder()
     .WithBlazor()
     .WithMessageBus()
-    .WithViewsFromAssembly(typeof(Program).Assembly)
+    .WithViewsFromAssembly(Program.HostAssembly)
     .BuildApp();
 
 var app = builder.Build();
@@ -37,19 +37,31 @@ var app = builder.Build();
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
 {
-    app.UseExceptionHandler("/Error", true);
+    _ = app.UseExceptionHandler("/Error", true);
 
     // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
-    app.UseHsts();
+    _ = app.UseHsts();
 }
 
-app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
-app.UseHttpsRedirection();
+_ = app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 
-app.UseAntiforgery();
+_ = app.UseHttpsRedirection();
 
-app.MapStaticAssets();
-app.MapRazorComponents<App>()
+_ = app.UseAntiforgery();
+
+_ = app.MapStaticAssets();
+
+_ = app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
 await app.RunAsync();
+
+/// <summary>
+/// The host type the compiler generates for this file's top-level statements. Declared explicitly so the
+/// entry point carries the same debugger and sealing attributes as the rest of the sample.
+/// </summary>
+internal sealed partial class Program
+{
+    /// <summary>Gets the assembly that hosts the sample's views, used when registering them at startup.</summary>
+    internal static System.Reflection.Assembly HostAssembly => typeof(Program).Assembly;
+}

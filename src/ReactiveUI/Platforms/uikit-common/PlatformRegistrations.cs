@@ -3,49 +3,21 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
 
-using System.Reactive.Concurrency;
-using ReactiveUI.Helpers;
-using Splat;
+using System.Diagnostics;
+using System.Runtime.CompilerServices;
 
+#if REACTIVE_SHIM
+namespace ReactiveUI.Reactive;
+#else
 namespace ReactiveUI;
-
-/// <summary>
-/// UIKit platform registrations.
-/// </summary>
+#endif
+/// <summary>UIKit platform registrations.</summary>
 /// <seealso cref="IWantsToRegisterStuff" />
 [Preserve(AllMembers = true)]
 public class PlatformRegistrations : IWantsToRegisterStuff
 {
     /// <inheritdoc/>
-    public void Register(IRegistrar registrar)
-    {
-        ArgumentExceptionHelper.ThrowIfNull(registrar);
-
-        registrar.RegisterConstant<IPlatformOperations>(static () => new PlatformOperations());
-        registrar.RegisterConstant<IBindingFallbackConverter>(static () => new ComponentModelFallbackConverter());
-        registrar.RegisterConstant<ICreatesObservableForProperty>(static () => new UIKitObservableForProperty());
-        registrar.RegisterConstant<ICreatesCommandBinding>(static () => new UIKitCommandBinders());
-
-        // DateTime ↔ NSDate converters
-        registrar.RegisterConstant<IBindingTypeConverter>(static () => new DateTimeToNSDateConverter());
-        registrar.RegisterConstant<IBindingTypeConverter>(static () => new NullableDateTimeToNSDateConverter());
-        registrar.RegisterConstant<IBindingTypeConverter>(static () => new NSDateToDateTimeConverter());
-        registrar.RegisterConstant<IBindingTypeConverter>(static () => new NSDateToNullableDateTimeConverter());
-
-        // DateTimeOffset ↔ NSDate converters
-        registrar.RegisterConstant<IBindingTypeConverter>(static () => new DateTimeOffsetToNSDateConverter());
-        registrar.RegisterConstant<IBindingTypeConverter>(static () => new NullableDateTimeOffsetToNSDateConverter());
-        registrar.RegisterConstant<IBindingTypeConverter>(static () => new NSDateToDateTimeOffsetConverter());
-        registrar.RegisterConstant<IBindingTypeConverter>(static () => new NSDateToNullableDateTimeOffsetConverter());
-
-        registrar.RegisterConstant<ICreatesObservableForProperty>(static () => new KVOObservableForProperty());
-
-        if (!ModeDetector.InUnitTestRunner())
-        {
-            RxSchedulers.TaskpoolScheduler = TaskPoolScheduler.Default;
-            RxSchedulers.MainThreadScheduler = new WaitForDispatcherScheduler(static () => new NSRunloopScheduler());
-        }
-
-        registrar.RegisterConstant<ISuspensionDriver>(static () => new AppSupportJsonSuspensionDriver());
-    }
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void Register(IRegistrar registrar) =>
+        ApplePlatformRegistrations.Register(registrar);
 }

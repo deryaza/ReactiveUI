@@ -4,18 +4,24 @@
 // See the LICENSE file in the project root for full license information.
 
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Globalization;
 using System.Reflection;
 using ReactiveUI.Internal;
 using Splat;
 
+#if REACTIVE_SHIM
+namespace ReactiveUI.Reactive.Winforms;
+#else
 namespace ReactiveUI.Winforms;
+#endif
 
 /// <summary>
 /// ActivationForViewFetcher is how ReactiveUI determine when a
 /// View is activated or deactivated. This is usually only used when porting
 /// ReactiveUI to a new UI framework.
 /// </summary>
+[DebuggerDisplay("ActivationForViewFetcher")]
 public class ActivationForViewFetcher : IActivationForViewFetcher, IEnableLogger
 {
     /// <summary>Caches whether the control is being used at design time.</summary>
@@ -31,9 +37,10 @@ public class ActivationForViewFetcher : IActivationForViewFetcher, IEnableLogger
         switch (view)
         {
             case Control control:
+
                 // We are very likely being called from control's constructor, which means control.Site is not yet set.
                 // We must delay the design mode check until after one of the activation events fires.
-                return new WhereObservable<bool>(GetActivationForControl(control), _ => !GetCachedIsDesignMode(control));
+                return new KeepSignal<bool>(GetActivationForControl(control), _ => !GetCachedIsDesignMode(control));
 
             case null:
                 {
@@ -54,53 +61,53 @@ public class ActivationForViewFetcher : IActivationForViewFetcher, IEnableLogger
                 }
         }
 
-        return EmptyObservable<bool>.Instance;
+        return Signal.None<bool>();
     }
 
     /// <summary>Builds the activation observable for a WinForms control, including form lifecycle when applicable.</summary>
     /// <param name="control">The control to observe.</param>
     /// <returns>An observable that signals when the control is activated and deactivated.</returns>
-    private static MergedDistinctObservable<bool> GetActivationForControl(Control control)
+    private static IObservable<bool> GetActivationForControl(Control control)
     {
         // Startup: Control.HandleCreated > Control.BindingContextChanged > Form.Load > Control.VisibleChanged > Form.Activated > Form.Shown
         // Shutdown: Form.Closing > Form.FormClosing > Form.Closed > Form.FormClosed > Form.Deactivate
         // https://docs.microsoft.com/en-us/dotnet/framework/winforms/order-of-events-in-windows-forms
         var handleDestroyed = new FromEventObservable<bool>(onNext =>
         {
-            void Handler(object? sender, EventArgs e) => onNext(false);
-            control.HandleDestroyed += Handler;
-            return new ActionDisposable(() => control.HandleDestroyed -= Handler);
+            EventHandler handler = (_, _) => onNext(false);
+            control.HandleDestroyed += handler;
+            return new ActionDisposable(() => control.HandleDestroyed -= handler);
         });
 
         var handleCreated = new FromEventObservable<bool>(onNext =>
         {
-            void Handler(object? sender, EventArgs e) => onNext(true);
-            control.HandleCreated += Handler;
-            return new ActionDisposable(() => control.HandleCreated -= Handler);
+            EventHandler handler = (_, _) => onNext(true);
+            control.HandleCreated += handler;
+            return new ActionDisposable(() => control.HandleCreated -= handler);
         });
 
         var visibleChanged = new FromEventObservable<bool>(onNext =>
         {
-            void Handler(object? sender, EventArgs e) => onNext(control.Visible);
-            control.VisibleChanged += Handler;
-            return new ActionDisposable(() => control.VisibleChanged -= Handler);
+            EventHandler handler = (_, _) => onNext(control.Visible);
+            control.VisibleChanged += handler;
+            return new ActionDisposable(() => control.VisibleChanged -= handler);
         });
 
         if (control is not Form form)
         {
             // Replaces Merge(handleDestroyed, handleCreated, visibleChanged).DistinctUntilChanged().
-            return new(handleDestroyed, handleCreated, visibleChanged);
+            return ReactiveUI.Primitives.LinqExtensions.BlendUnique(handleDestroyed, handleCreated, visibleChanged);
         }
 
         var formClosed = new FromEventObservable<bool>(onNext =>
         {
-            void Handler(object? sender, FormClosedEventArgs e) => onNext(control.Visible);
-            form.FormClosed += Handler;
-            return new ActionDisposable(() => form.FormClosed -= Handler);
+            FormClosedEventHandler handler = (_, _) => onNext(control.Visible);
+            form.FormClosed += handler;
+            return new ActionDisposable(() => form.FormClosed -= handler);
         });
 
         // Replaces Merge(...).Merge(formClosed).DistinctUntilChanged().
-        return new(handleDestroyed, handleCreated, visibleChanged, formClosed);
+        return ReactiveUI.Primitives.LinqExtensions.BlendUnique(handleDestroyed, handleCreated, visibleChanged, formClosed);
     }
 
     /// <summary>Determines whether the control is currently running at design time.</summary>

@@ -3,22 +3,22 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
 
-using System.Reactive;
-using System.Reactive.Disposables;
+#if REACTIVE_SHIM
+using ReactiveUI.Binding.Reactive.Fallback;
+using ReactiveUI.Reactive.Builder;
+#else
+using ReactiveUI.Binding.Fallback;
 using ReactiveUI.Builder;
+#endif
 using Splat;
 using Splat.Builder;
 
 namespace ReactiveUI.Tests.Activation;
 
-/// <summary>
-///     Tests for activating view behaviour.
-/// </summary>
+/// <summary>Tests for activating view behaviour.</summary>
 public class ActivatingViewTests
 {
-    /// <summary>
-    ///     Verifies that a design-mode activatable view reports design mode as false by default.
-    /// </summary>
+    /// <summary>Verifies that a design-mode activatable view reports design mode as false by default.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task GetIsDesignModeReturnsFalseByDefault()
@@ -28,9 +28,7 @@ public class ActivatingViewTests
         await Assert.That(fixture.GetIsDesignMode()).IsFalse();
     }
 
-    /// <summary>
-    ///     Verifies that <c>WhenActivated</c> throws when no activation fetcher is registered and the view is not in design mode.
-    /// </summary>
+    /// <summary>Verifies that <c>WhenActivated</c> throws when no activation fetcher is registered and the view is not in design mode.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task WhenActivatedWithoutFetcherThrowsWhenDefaultDesignModeIsFalse()
@@ -42,7 +40,7 @@ public class ActivatingViewTests
 
             var fixture = new DefaultDesignModeActivatableView();
 
-            var ex = await Assert.That(() => fixture.WhenActivated(static (CompositeDisposable _) => { }))
+            var ex = await Assert.That(() => fixture.WhenActivated(NoopActivation))
                 .Throws<ArgumentException>();
 
             await Assert.That(ex).IsNotNull();
@@ -52,19 +50,17 @@ public class ActivatingViewTests
         ViewForMixins.ResetActivationFetcherCacheForTesting();
     }
 
-    /// <summary>
-    ///     Tests to make sure that views generally activate.
-    /// </summary>
+    /// <summary>Tests to make sure that views generally activate.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task ActivatingViewSmokeTest()
     {
         AppBuilder.ResetBuilderStateForTests();
         var locator = new ModernDependencyResolver();
-        locator.CreateReactiveUIBuilder()
+        _ = locator.CreateReactiveUIBuilder()
             .WithCoreServices()
-            .WithCustomRegistration(builder =>
-                builder.Register<IActivationForViewFetcher>(() => new ActivatingViewFetcher())).BuildApp();
+            .WithCustomRegistration(static builder =>
+                builder.Register<IActivationForViewFetcher>(static () => new ActivatingViewFetcher())).BuildApp();
 
         using (locator.WithResolver())
         {
@@ -76,14 +72,14 @@ public class ActivatingViewTests
                 await Assert.That(fixture.IsActiveCount).IsEqualTo(0);
             }
 
-            fixture.Loaded.OnNext(Unit.Default);
+            fixture.Loaded.OnNext(RxVoid.Default);
             using (Assert.Multiple())
             {
                 await Assert.That(vm.IsActiveCount).IsEqualTo(1);
                 await Assert.That(fixture.IsActiveCount).IsEqualTo(1);
             }
 
-            fixture.Unloaded.OnNext(Unit.Default);
+            fixture.Unloaded.OnNext(RxVoid.Default);
             using (Assert.Multiple())
             {
                 await Assert.That(vm.IsActiveCount).IsEqualTo(0);
@@ -92,19 +88,17 @@ public class ActivatingViewTests
         }
     }
 
-    /// <summary>
-    ///     Tests the can unload and load view again.
-    /// </summary>
+    /// <summary>Tests the can unload and load view again.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task CanUnloadAndLoadViewAgain()
     {
         AppBuilder.ResetBuilderStateForTests();
         var locator = new ModernDependencyResolver();
-        locator.CreateReactiveUIBuilder()
+        _ = locator.CreateReactiveUIBuilder()
             .WithCoreServices()
-            .WithCustomRegistration(builder =>
-                builder.Register<IActivationForViewFetcher>(() => new ActivatingViewFetcher())).BuildApp();
+            .WithCustomRegistration(static builder =>
+                builder.Register<IActivationForViewFetcher>(static () => new ActivatingViewFetcher())).BuildApp();
 
         using (locator.WithResolver())
         {
@@ -116,21 +110,21 @@ public class ActivatingViewTests
                 await Assert.That(fixture.IsActiveCount).IsEqualTo(0);
             }
 
-            fixture.Loaded.OnNext(Unit.Default);
+            fixture.Loaded.OnNext(RxVoid.Default);
             using (Assert.Multiple())
             {
                 await Assert.That(vm.IsActiveCount).IsEqualTo(1);
                 await Assert.That(fixture.IsActiveCount).IsEqualTo(1);
             }
 
-            fixture.Unloaded.OnNext(Unit.Default);
+            fixture.Unloaded.OnNext(RxVoid.Default);
             using (Assert.Multiple())
             {
                 await Assert.That(vm.IsActiveCount).IsEqualTo(0);
                 await Assert.That(fixture.IsActiveCount).IsEqualTo(0);
             }
 
-            fixture.Loaded.OnNext(Unit.Default);
+            fixture.Loaded.OnNext(RxVoid.Default);
             using (Assert.Multiple())
             {
                 await Assert.That(vm.IsActiveCount).IsEqualTo(1);
@@ -139,19 +133,17 @@ public class ActivatingViewTests
         }
     }
 
-    /// <summary>
-    ///     Tests for making sure nulling the view model deactivate it.
-    /// </summary>
+    /// <summary>Tests for making sure nulling the view model deactivate it.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task NullingViewModelDeactivateIt()
     {
         AppBuilder.ResetBuilderStateForTests();
         var locator = new ModernDependencyResolver();
-        locator.CreateReactiveUIBuilder()
+        _ = locator.CreateReactiveUIBuilder()
             .WithCoreServices()
-            .WithCustomRegistration(builder =>
-                builder.Register<IActivationForViewFetcher>(() => new ActivatingViewFetcher())).BuildApp();
+            .WithCustomRegistration(static builder =>
+                builder.Register<IActivationForViewFetcher>(static () => new ActivatingViewFetcher())).BuildApp();
 
         using (locator.WithResolver())
         {
@@ -163,7 +155,7 @@ public class ActivatingViewTests
                 await Assert.That(fixture.IsActiveCount).IsEqualTo(0);
             }
 
-            fixture.Loaded.OnNext(Unit.Default);
+            fixture.Loaded.OnNext(RxVoid.Default);
             using (Assert.Multiple())
             {
                 await Assert.That(vm.IsActiveCount).IsEqualTo(1);
@@ -175,19 +167,17 @@ public class ActivatingViewTests
         }
     }
 
-    /// <summary>
-    ///     Tests setting the view model after loaded loads it.
-    /// </summary>
+    /// <summary>Tests setting the view model after loaded loads it.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task SettingViewModelAfterLoadedLoadsIt()
     {
         AppBuilder.ResetBuilderStateForTests();
         var locator = new ModernDependencyResolver();
-        locator.CreateReactiveUIBuilder()
+        _ = locator.CreateReactiveUIBuilder()
             .WithCoreServices()
-            .WithCustomRegistration(builder =>
-                builder.Register<IActivationForViewFetcher>(() => new ActivatingViewFetcher())).BuildApp();
+            .WithCustomRegistration(static builder =>
+                builder.Register<IActivationForViewFetcher>(static () => new ActivatingViewFetcher())).BuildApp();
 
         using (locator.WithResolver())
         {
@@ -200,7 +190,7 @@ public class ActivatingViewTests
                 await Assert.That(fixture.IsActiveCount).IsEqualTo(0);
             }
 
-            fixture.Loaded.OnNext(Unit.Default);
+            fixture.Loaded.OnNext(RxVoid.Default);
             await Assert.That(fixture.IsActiveCount).IsEqualTo(1);
 
             fixture.ViewModel = vm;
@@ -210,7 +200,7 @@ public class ActivatingViewTests
                 await Assert.That(vm.IsActiveCount).IsEqualTo(1);
             }
 
-            fixture.Unloaded.OnNext(Unit.Default);
+            fixture.Unloaded.OnNext(RxVoid.Default);
             using (Assert.Multiple())
             {
                 await Assert.That(fixture.IsActiveCount).IsEqualTo(0);
@@ -219,19 +209,17 @@ public class ActivatingViewTests
         }
     }
 
-    /// <summary>
-    ///     Tests switching the view model deactivates it.
-    /// </summary>
+    /// <summary>Tests switching the view model deactivates it.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task SwitchingViewModelDeactivatesIt()
     {
         AppBuilder.ResetBuilderStateForTests();
         var locator = new ModernDependencyResolver();
-        locator.CreateReactiveUIBuilder()
+        _ = locator.CreateReactiveUIBuilder()
             .WithCoreServices()
-            .WithCustomRegistration(builder =>
-                builder.Register<IActivationForViewFetcher>(() => new ActivatingViewFetcher())).BuildApp();
+            .WithCustomRegistration(static builder =>
+                builder.Register<IActivationForViewFetcher>(static () => new ActivatingViewFetcher())).BuildApp();
 
         using (locator.WithResolver())
         {
@@ -243,7 +231,7 @@ public class ActivatingViewTests
                 await Assert.That(fixture.IsActiveCount).IsEqualTo(0);
             }
 
-            fixture.Loaded.OnNext(Unit.Default);
+            fixture.Loaded.OnNext(RxVoid.Default);
             using (Assert.Multiple())
             {
                 await Assert.That(vm.IsActiveCount).IsEqualTo(1);
@@ -262,5 +250,44 @@ public class ActivatingViewTests
         }
     }
 
+    /// <summary>Verifies the view model still activates when no registered plugin can watch the view's ViewModel property.</summary>
+    /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
+    [Test]
+    public async Task ViewModelActivatesWhenNoPluginCanWatchViewModel()
+    {
+        var locator = new ModernDependencyResolver();
+        locator.Register<IActivationForViewFetcher>(static () => new ActivatingViewFetcher());
+
+        using (locator.WithResolver())
+        {
+            ViewForMixins.ResetActivationFetcherCacheForTesting();
+            ObservationAffinityChecker.Refresh();
+            try
+            {
+                var vm = new ActivatingViewModel();
+                var fixture = new ActivatingView { ViewModel = vm };
+
+                fixture.Loaded.OnNext(RxVoid.Default);
+                await Assert.That(vm.IsActiveCount).IsEqualTo(1);
+
+                fixture.Unloaded.OnNext(RxVoid.Default);
+                await Assert.That(vm.IsActiveCount).IsEqualTo(0);
+            }
+            finally
+            {
+                ViewForMixins.ResetActivationFetcherCacheForTesting();
+                ObservationAffinityChecker.Refresh();
+            }
+        }
+    }
+
+    /// <summary>Provides a no-op activation callback for overload selection in tests.</summary>
+    /// <param name="_">The activation-scoped disposable container.</param>
+    private static void NoopActivation(ActivationDisposables _)
+    {
+        // Intentionally empty.
+    }
+
+    /// <summary>A minimal activatable view used to exercise default design-mode activation behaviour.</summary>
     private sealed class DefaultDesignModeActivatableView : ReactiveObject, IActivatableView;
 }

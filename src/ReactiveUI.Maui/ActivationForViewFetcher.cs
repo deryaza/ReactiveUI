@@ -1,84 +1,89 @@
-﻿// Copyright (c) 2009-2026 .NET Foundation and Contributors. All rights reserved.
+// Copyright (c) 2009-2026 .NET Foundation and Contributors. All rights reserved.
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
 
-using System.Reactive;
+using System.Diagnostics;
 using System.Reflection;
 using ReactiveUI.Internal;
+using ReactiveUI.Primitives;
 
 #if IS_WINUI
 using Microsoft.UI.Xaml;
+#if REACTIVE_SHIM
+using ReactiveUI.Reactive.Maui.Internal;
+#else
 using ReactiveUI.Maui.Internal;
+#endif
 
+#if REACTIVE_SHIM
+namespace ReactiveUI.Reactive.WinUI;
+#else
 namespace ReactiveUI.WinUI;
+#endif
 #endif
 #if IS_MAUI
 using Microsoft.Maui.Controls;
 
+#if REACTIVE_SHIM
+namespace ReactiveUI.Reactive.Maui;
+#else
 namespace ReactiveUI.Maui;
 #endif
+#endif
 
-/// <summary>
-/// This class is the default implementation that determines when views are Activated and Deactivated.
-/// </summary>
+/// <summary>This class is the default implementation that determines when views are Activated and Deactivated.</summary>
 /// <seealso cref="IActivationForViewFetcher" />
 public class ActivationForViewFetcher : IActivationForViewFetcher
 {
     /// <inheritdoc/>
-    public int GetAffinityForView(Type view) =>
+    public int GetAffinityForView(Type view)
+    {
+        var typeInfo = view.GetTypeInfo();
+        var isActivatableView =
 #if IS_WINUI
-       typeof(FrameworkElement).GetTypeInfo().IsAssignableFrom(view.GetTypeInfo())
+            typeof(FrameworkElement).GetTypeInfo().IsAssignableFrom(typeInfo);
 #endif
 #if IS_MAUI
-        typeof(Page).GetTypeInfo().IsAssignableFrom(view.GetTypeInfo()) ||
-        typeof(View).GetTypeInfo().IsAssignableFrom(view.GetTypeInfo()) ||
-        typeof(Cell).GetTypeInfo().IsAssignableFrom(view.GetTypeInfo())
+            typeof(Page).GetTypeInfo().IsAssignableFrom(typeInfo)
+            || typeof(View).GetTypeInfo().IsAssignableFrom(typeInfo)
+            || typeof(Cell).GetTypeInfo().IsAssignableFrom(typeInfo);
 #endif
-            ? BindingAffinity.ExactType
-            : 0;
+        return isActivatableView ? BindingAffinity.ExactType : 0;
+    }
 
     /// <inheritdoc/>
     public IObservable<bool> GetActivationForView(IActivatableView view)
     {
         // ?? is right-associative, so casting the terminal operand unifies the differently-typed concrete sinks the
         // helpers return under IObservable<bool>.
-        var activation =
-            GetActivationFor(view as ICanActivate) ??
+        var activation = GetActivationFor(view as ICanActivate)
 #if IS_WINUI
-            GetActivationFor(view as FrameworkElement) ??
+            ?? GetActivationFor(view as FrameworkElement)
 #endif
 #if IS_MAUI
-            GetActivationFor(view as Page) ??
-            GetActivationFor(view as View) ??
-            GetActivationFor(view as Cell) ??
+            ?? GetActivationFor(view as Page)
+            ?? GetActivationFor(view as View)
+            ?? GetActivationFor(view as Cell)
 #endif
-            (IObservable<bool>)NeverObservable<bool>.Instance;
+            ?? Signal.Silent<bool>();
 
-        return new DistinctUntilChangedObservable<bool>(activation);
+        return activation.DistinctUntilChanged();
     }
 
     /// <summary>Gets the activation stream for an <see cref="ICanActivate"/>, or null when not applicable.</summary>
     /// <param name="canActivate">The view to observe, or null.</param>
     /// <returns>The activation stream, or null when <paramref name="canActivate"/> is null.</returns>
-    private static MergedObservable<bool>? GetActivationFor(ICanActivate? canActivate)
-    {
-        if (canActivate is null)
-        {
-            return null;
-        }
-
-        // Replaces Activated.Select(_ => true).Merge(Deactivated.Select(_ => false)).
-        return new MergedObservable<bool>(
-            new SelectObservable<Unit, bool>(canActivate.Activated, static _ => true),
-            new SelectObservable<Unit, bool>(canActivate.Deactivated, static _ => false));
-    }
+    private static IObservable<bool>? GetActivationFor(ICanActivate? canActivate) =>
+        canActivate is null ? null : Signal.Blend(
+            new MapSignal<RxVoid, bool>(canActivate.Activated, static _ => true),
+            new MapSignal<RxVoid, bool>(canActivate.Deactivated, static _ => false));
 
 #if IS_MAUI
     /// <summary>Gets the activation stream for a <see cref="Page"/>, or null when not applicable.</summary>
     /// <param name="page">The page to observe, or null.</param>
     /// <returns>The activation stream, or null when <paramref name="page"/> is null.</returns>
-    private static MergedObservable<bool>? GetActivationFor(Page? page)
+    private static IObservable<bool>? GetActivationFor(Page? page)
     {
         if (page is null)
         {
@@ -87,19 +92,19 @@ public class ActivationForViewFetcher : IActivationForViewFetcher
 
         var appearing = new FromEventObservable<bool>(onNext =>
         {
-            void Handler(object? sender, EventArgs e) => onNext(true);
-            page.Appearing += Handler;
-            return new ActionDisposable(() => page.Appearing -= Handler);
+            EventHandler handler = (_, _) => onNext(true);
+            page.Appearing += handler;
+            return new ActionDisposable(() => page.Appearing -= handler);
         });
 
         var disappearing = new FromEventObservable<bool>(onNext =>
         {
-            void Handler(object? sender, EventArgs e) => onNext(false);
-            page.Disappearing += Handler;
-            return new ActionDisposable(() => page.Disappearing -= Handler);
+            EventHandler handler = (_, _) => onNext(false);
+            page.Disappearing += handler;
+            return new ActionDisposable(() => page.Disappearing -= handler);
         });
 
-        return new MergedObservable<bool>(appearing, disappearing);
+        return Signal.Blend(appearing, disappearing);
     }
 #endif
 
@@ -107,7 +112,7 @@ public class ActivationForViewFetcher : IActivationForViewFetcher
     /// <summary>Gets the activation stream for a <see cref="View"/>, or null when not applicable.</summary>
     /// <param name="view">The view to observe, or null.</param>
     /// <returns>The activation stream, or null when <paramref name="view"/> is null.</returns>
-    private static DistinctUntilChangedObservable<bool>? GetActivationFor(View? view)
+    private static IObservable<bool>? GetActivationFor(View? view)
     {
         if (view is null)
         {
@@ -116,27 +121,27 @@ public class ActivationForViewFetcher : IActivationForViewFetcher
 
         var loaded = new FromEventObservable<bool>(onNext =>
         {
-            void Handler(object? sender, EventArgs e) => onNext(true);
-            view.Loaded += Handler;
-            return new ActionDisposable(() => view.Loaded -= Handler);
+            EventHandler handler = (_, _) => onNext(true);
+            view.Loaded += handler;
+            return new ActionDisposable(() => view.Loaded -= handler);
         });
 
         var unloaded = new FromEventObservable<bool>(onNext =>
         {
-            void Handler(object? sender, EventArgs e) => onNext(false);
-            view.Unloaded += Handler;
-            return new ActionDisposable(() => view.Unloaded -= Handler);
+            EventHandler handler = (_, _) => onNext(false);
+            view.Unloaded += handler;
+            return new ActionDisposable(() => view.Unloaded -= handler);
         });
 
         // Replaces loaded.Merge(unloaded).StartWith(view.IsLoaded).DistinctUntilChanged().
-        return new DistinctUntilChangedObservable<bool>(
-            new StartWithObservable<bool>(new MergedObservable<bool>(loaded, unloaded), view.IsLoaded));
+        return new StartWithObservable<bool>(Signal.Blend(loaded, unloaded), view.IsLoaded)
+            .DistinctUntilChanged();
     }
 
     /// <summary>Gets the activation stream for a <see cref="Cell"/>, or null when not applicable.</summary>
     /// <param name="cell">The cell to observe, or null.</param>
     /// <returns>The activation stream, or null when <paramref name="cell"/> is null.</returns>
-    private static MergedObservable<bool>? GetActivationFor(Cell? cell)
+    private static IObservable<bool>? GetActivationFor(Cell? cell)
     {
         if (cell is null)
         {
@@ -145,25 +150,25 @@ public class ActivationForViewFetcher : IActivationForViewFetcher
 
         var appearing = new FromEventObservable<bool>(onNext =>
         {
-            void Handler(object? sender, EventArgs e) => onNext(true);
-            cell.Appearing += Handler;
-            return new ActionDisposable(() => cell.Appearing -= Handler);
+            EventHandler handler = (_, _) => onNext(true);
+            cell.Appearing += handler;
+            return new ActionDisposable(() => cell.Appearing -= handler);
         });
 
         var disappearing = new FromEventObservable<bool>(onNext =>
         {
-            void Handler(object? sender, EventArgs e) => onNext(false);
-            cell.Disappearing += Handler;
-            return new ActionDisposable(() => cell.Disappearing -= Handler);
+            EventHandler handler = (_, _) => onNext(false);
+            cell.Disappearing += handler;
+            return new ActionDisposable(() => cell.Disappearing -= handler);
         });
 
-        return new MergedObservable<bool>(appearing, disappearing);
+        return Signal.Blend(appearing, disappearing);
     }
 #else
     /// <summary>Gets the activation stream for a <see cref="FrameworkElement"/>, or null when not applicable.</summary>
     /// <param name="view">The framework element to observe, or null.</param>
     /// <returns>The activation stream, or null when <paramref name="view"/> is null.</returns>
-    private static DistinctUntilChangedObservable<bool>? GetActivationFor(FrameworkElement? view)
+    private static IObservable<bool>? GetActivationFor(FrameworkElement? view)
     {
         if (view is null)
         {
@@ -172,16 +177,16 @@ public class ActivationForViewFetcher : IActivationForViewFetcher
 
         var viewLoaded = new FromEventObservable<bool>(onNext =>
         {
-            void Handler(FrameworkElement sender, object args) => onNext(true);
-            view.Loading += Handler;
-            return new ActionDisposable(() => view.Loading -= Handler);
+            Windows.Foundation.TypedEventHandler<FrameworkElement, object> handler = (_, _) => onNext(true);
+            view.Loading += handler;
+            return new ActionDisposable(() => view.Loading -= handler);
         });
 
         var viewUnloaded = new FromEventObservable<bool>(onNext =>
         {
-            void Handler(object sender, RoutedEventArgs args) => onNext(false);
-            view.Unloaded += Handler;
-            return new ActionDisposable(() => view.Unloaded -= Handler);
+            RoutedEventHandler handler = (_, _) => onNext(false);
+            view.Unloaded += handler;
+            return new ActionDisposable(() => view.Unloaded -= handler);
         });
 
         // Observe IsHitTestVisible property changes using DependencyProperty (AOT-safe)
@@ -192,11 +197,28 @@ public class ActivationForViewFetcher : IActivationForViewFetcher
             () => view.IsHitTestVisible);
 
         // Replaces Merge(...).Select(b => b ? hitTest.SkipWhile(!x) : false).Switch().DistinctUntilChanged().
-        return new DistinctUntilChangedObservable<bool>(
-            new SwitchObservable<bool>(
-                new SelectObservable<bool, IObservable<bool>>(
-                    new MergedObservable<bool>(viewLoaded, viewUnloaded),
-                    b => b ? new SkipWhileObservable<bool>(isHitTestVisible, static x => !x) : new ReturnObservable<bool>(false))));
+        return SwitchLatest(
+                new MapSignal<bool, IObservable<bool>>(
+                    Signal.Blend(viewLoaded, viewUnloaded),
+                    b => b ? isHitTestVisible.SkipWhile(static x => !x) : Signal.Emit<bool>(false)))
+            .DistinctUntilChanged();
     }
+
+    // ObservedProperty.Switch and the Primitives Switch operator both apply to IObservable<IObservable<T>>,
+    // so calling .Switch() as an extension is ambiguous (CS0121) once ReactiveUI.Binding is in scope.
+    // Qualifying the call explicitly picks ObservedProperty's overload and resolves the ambiguity.
+#if REACTIVE_SHIM
+    /// <summary>Switches to the latest inner signal, disambiguating <c>Switch</c> between ObservedProperty and the Primitives operator.</summary>
+    /// <param name="source">The signal of signals to flatten.</param>
+    /// <returns>A signal of the latest inner signal's values.</returns>
+    private static IObservable<bool> SwitchLatest(IObservable<IObservable<bool>> source) =>
+        ReactiveUI.Binding.Reactive.ObservedProperty.Switch(source);
+#else
+    /// <summary>Switches to the latest inner signal, disambiguating <c>Switch</c> between ObservedProperty and the Primitives operator.</summary>
+    /// <param name="source">The signal of signals to flatten.</param>
+    /// <returns>A signal of the latest inner signal's values.</returns>
+    private static IObservable<bool> SwitchLatest(IObservable<IObservable<bool>> source) =>
+        ReactiveUI.Binding.ObservedProperty.Switch(source);
+#endif
 #endif
 }

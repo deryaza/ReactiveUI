@@ -12,36 +12,18 @@ using TUnit.Core.Executors;
 
 namespace ReactiveUI.AOT.Tests;
 
-/// <summary>
-/// Assembly-level hooks for test initialization and cleanup.
-/// </summary>
+/// <summary>Assembly-level hooks for test initialization and cleanup.</summary>
 public static class AssemblyHooks
 {
-    /// <summary>
-    /// Called before any tests in this assembly start.
-    /// </summary>
+    /// <summary>Called before any tests in this assembly start.</summary>
+    /// <remarks>
+    /// Overrides <see cref="ModeDetector"/> so the framework detects a unit test runner.
+    /// App builder initialization is handled per-test via AppBuilderTestExecutor.
+    /// </remarks>
     [Before(Assembly)]
-    public static void AssemblySetup() =>
+    public static void AssemblySetup() => ModeDetector.OverrideModeDetector(new TestModeDetector());
 
-        // Override ModeDetector to ensure we're detected as being in a unit test runner.
-        // App builder initialization is handled per-test via AppBuilderTestExecutor.
-        ModeDetector.OverrideModeDetector(new TestModeDetector());
-
-    /// <summary>
-    /// Called after all tests in this assembly complete.
-    /// </summary>
-    [After(Assembly)]
-    public static void AssemblyTeardown()
-    {
-        // Clean up resources
-        GC.Collect();
-        GC.WaitForPendingFinalizers();
-        GC.Collect();
-    }
-
-    /// <summary>
-    /// Mode detector that always indicates we're in a unit test runner.
-    /// </summary>
+    /// <summary>Mode detector that always indicates we're in a unit test runner.</summary>
     private sealed class TestModeDetector : IModeDetector
     {
         /// <inheritdoc/>

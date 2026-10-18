@@ -3,11 +3,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
 
-using System.Reactive.Concurrency;
-using System.Reactive.Disposables;
-using System.Reactive.Disposables.Fluent;
-using System.Reactive.Linq;
-using System.Reactive.Subjects;
 using Splat;
 
 namespace ReactiveUI.AOT.Tests;
@@ -20,15 +15,14 @@ namespace ReactiveUI.AOT.Tests;
 [NotInParallel]
 public class ComprehensiveAOTTests
 {
-    /// <summary>
-    /// The initial value used when seeding reactive properties and subjects.
-    /// </summary>
+    /// <summary>The initial value used when seeding reactive properties and subjects.</summary>
     private const string InitialValue = "initial";
 
-    /// <summary>
-    /// The expected number of operations performed in the count-based assertions.
-    /// </summary>
+    /// <summary>The expected number of operations performed in the count-based assertions.</summary>
     private const int ExpectedCount = 2;
+
+    /// <summary>The value assigned to reactive properties to represent a change.</summary>
+    private const string ChangedValue = "changed";
 
     /// <summary>
     /// Tests that demonstrate AOT-compatible patterns that work well in AOT scenarios.
@@ -40,7 +34,7 @@ public class ComprehensiveAOTTests
     {
         // Use string-based property names for ToProperty (AOT-compatible)
         var obj = new TestReactiveObject();
-        var helper = Observable.Return("test")
+        var helper = Signal.Emit("test")
             .ToProperty(obj, nameof(TestReactiveObject.ComputedProperty));
 
         await Assert.That(helper.Value).IsEqualTo("test");
@@ -53,12 +47,10 @@ public class ComprehensiveAOTTests
         obj.TestProperty = "test2";
 
         await Assert.That(changes).Contains(nameof(TestReactiveObject.TestProperty));
-        await Assert.That(changes.Count(x => x == nameof(TestReactiveObject.TestProperty))).IsEqualTo(ExpectedCount);
+        await Assert.That(changes.Count(static x => x == nameof(TestReactiveObject.TestProperty))).IsEqualTo(ExpectedCount);
     }
 
-    /// <summary>
-    /// Tests that interaction patterns work well in AOT.
-    /// </summary>
+    /// <summary>Tests that interaction patterns work well in AOT.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     public async Task Interactions_WorkInAOT()
@@ -66,18 +58,16 @@ public class ComprehensiveAOTTests
         var interaction = new Interaction<string, bool>();
         var result = false;
 
-        interaction.RegisterHandler(static context => context.SetOutput(context.Input == "test"));
+        _ = interaction.RegisterHandler(static context => context.SetOutput(context.Input == "test"));
 
-        result = interaction.Handle("test").Wait();
+        result = await interaction.Handle("test");
         await Assert.That(result).IsTrue();
 
-        result = interaction.Handle("fail").Wait();
+        result = await interaction.Handle("fail");
         await Assert.That(result).IsFalse();
     }
 
-    /// <summary>
-    /// Tests that message bus functionality works in AOT.
-    /// </summary>
+    /// <summary>Tests that message bus functionality works in AOT.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     public async Task MessageBus_WorksInAOT()
@@ -85,7 +75,7 @@ public class ComprehensiveAOTTests
         var messageBus = new MessageBus();
         var receivedMessages = new List<string>();
 
-        messageBus.Listen<string>().ObserveOn(ImmediateScheduler.Instance).Subscribe(receivedMessages.Add);
+        _ = messageBus.Listen<string>().ObserveOn(Sequencer.Immediate).Subscribe(receivedMessages.Add);
 
         messageBus.SendMessage("Message1");
         messageBus.SendMessage("Message2");
@@ -104,14 +94,14 @@ public class ComprehensiveAOTTests
     public async Task ReactiveCommand_WithProperSuppression_WorksInAOT()
     {
         var executed = false;
-        var command = ReactiveCommand.Create(() => executed = true, outputScheduler: ImmediateScheduler.Instance);
+        var command = ReactiveCommand.Create(() => executed = true, outputScheduler: Sequencer.Immediate);
 
         var canExecute = true;
-        command.CanExecute.ObserveOn(ImmediateScheduler.Instance).Subscribe(canExec => canExecute = canExec);
+        _ = command.CanExecute.ObserveOn(Sequencer.Immediate).Subscribe(canExec => canExecute = canExec);
 
         await Assert.That(canExecute).IsTrue();
 
-        command.Execute().ObserveOn(ImmediateScheduler.Instance).Subscribe();
+        _ = command.Execute().ObserveOn(Sequencer.Immediate).Subscribe();
         await Assert.That(executed).IsTrue();
     }
 
@@ -124,34 +114,31 @@ public class ComprehensiveAOTTests
     public async Task ReactiveProperty_WithExplicitScheduler_WorksInAOT()
     {
         // Use explicit scheduler to avoid RxApp dependency (AOT-friendly)
-        var scheduler = CurrentThreadScheduler.Instance;
-        var property = new ReactiveProperty<string>(InitialValue, scheduler, false, false);
+        var property = new ReactiveProperty<string>(InitialValue, Sequencer.CurrentThread, false, false);
 
         var values = new List<string>();
-        property.ObserveOn(ImmediateScheduler.Instance).Subscribe(value => values.Add(value ?? string.Empty));
+        _ = property.ObserveOn(Sequencer.Immediate).Subscribe(value => values.Add(value ?? string.Empty));
 
-        property.Value = "changed";
+        property.Value = ChangedValue;
 
         await Assert.That(values).Contains(InitialValue);
         using (Assert.Multiple())
         {
-            await Assert.That(values).Contains("changed");
-            await Assert.That(property.Value).IsEqualTo("changed");
+            await Assert.That(values).Contains(ChangedValue);
+            await Assert.That(property.Value).IsEqualTo(ChangedValue);
         }
     }
 
-    /// <summary>
-    /// Tests that ObservableAsPropertyHelper works correctly with string-based binding.
-    /// </summary>
+    /// <summary>Tests that ObservableAsPropertyHelper works correctly with string-based binding.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     public async Task ObservableAsPropertyHelper_StringBased_WorksInAOT()
     {
         var obj = new TestReactiveObject();
-        var scheduler = CurrentThreadScheduler.Instance;
+        var scheduler = Sequencer.CurrentThread;
 
         // String-based property binding is AOT-compatible
-        var source = new BehaviorSubject<string>(InitialValue);
+        using var source = new StateSignal<string>(InitialValue);
         var helper = source
             .ObserveOn(scheduler)
             .ToProperty(obj, nameof(TestReactiveObject.ComputedProperty));
@@ -162,34 +149,26 @@ public class ComprehensiveAOTTests
         await Assert.That(helper.Value).IsEqualTo("updated");
 
         helper.Dispose();
-        source.Dispose();
     }
 
-    /// <summary>
-    /// Tests that demonstrate how to use dependency injection in AOT scenarios.
-    /// </summary>
+    /// <summary>Tests that demonstrate how to use dependency injection in AOT scenarios.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     public async Task DependencyInjection_BasicUsage_WorksInAOT()
     {
         Splat.Builder.AppBuilder.ResetBuilderStateForTests();
 
-        // Basic DI operations that work in AOT
-        var resolver = Locator.CurrentMutable;
-
         // Register concrete types (AOT-friendly)
-        resolver.Register<IScheduler>(static () => CurrentThreadScheduler.Instance);
+        Locator.CurrentMutable.Register<ISequencer>(static () => Sequencer.CurrentThread);
 
         // Resolve registered types
-        var scheduler = Locator.Current.GetService<IScheduler>();
+        var scheduler = Locator.Current.GetService<ISequencer>();
 
         await Assert.That(scheduler).IsNotNull();
-        await Assert.That(scheduler).IsTypeOf<CurrentThreadScheduler>();
+        await Assert.That(scheduler).IsSameReferenceAs(Sequencer.CurrentThread);
     }
 
-    /// <summary>
-    /// Tests demonstrating view model activation patterns in AOT.
-    /// </summary>
+    /// <summary>Tests demonstrating view model activation patterns in AOT.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     public async Task ViewModelActivation_PatternWorks_InAOT()
@@ -203,12 +182,12 @@ public class ComprehensiveAOTTests
             activationCount++;
 
             // Register cleanup action
-            Disposable.Create(() => deactivationCount++)
+            _ = new ActionDisposable(() => deactivationCount++)
                 .DisposeWith(disposables);
         });
 
         // Test activation/deactivation cycle
-        viewModel.Activator.Activate();
+        _ = viewModel.Activator.Activate();
         using (Assert.Multiple())
         {
             await Assert.That(activationCount).IsEqualTo(1);
@@ -223,7 +202,7 @@ public class ComprehensiveAOTTests
         }
 
         // Test multiple activation cycles
-        viewModel.Activator.Activate();
+        _ = viewModel.Activator.Activate();
         viewModel.Activator.Deactivate();
 
         using (Assert.Multiple())

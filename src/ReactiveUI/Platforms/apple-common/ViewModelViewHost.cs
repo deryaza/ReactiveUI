@@ -3,9 +3,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
 
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
-using System.Reactive.Concurrency;
-using ReactiveUI.Helpers;
+using System.Runtime.CompilerServices;
 using ReactiveUI.Internal;
 
 #if UIKIT
@@ -16,12 +16,18 @@ using NSViewController = UIKit.UIViewController;
 using AppKit;
 #endif
 
-namespace ReactiveUI;
+#if REACTIVE_SHIM
+using static ReactiveUI.Binding.Reactive.ViewLocator;
+#else
+using static ReactiveUI.Binding.ViewLocator;
+#endif
 
-/// <summary>
-/// A controller that resolves an <see cref="IViewFor"/> implementation for the supplied <see cref="ViewModel"/> and
-/// hosts it as a child view controller.
-/// </summary>
+#if REACTIVE_SHIM
+namespace ReactiveUI.Reactive;
+#else
+namespace ReactiveUI;
+#endif
+/// <summary>A controller that resolves an <see cref="IViewFor"/> implementation for the supplied <see cref="ViewModel"/> and hosts it as a child view controller.</summary>
 /// <remarks>
 /// <para>
 /// <see cref="ViewModelViewHost"/> is useful when a view is responsible for projecting an arbitrary view model instance
@@ -31,6 +37,12 @@ namespace ReactiveUI;
 /// <para>
 /// Provide a <see cref="DefaultContent"/> controller to display placeholder UI while no view model is available, or set
 /// <see cref="ViewContractObservable"/> to drive platform-specific view selection.
+/// </para>
+/// <para>
+/// The host asks the view locator for the view by the view model's run-time type, without building any type at run
+/// time, so it is safe to trim and to compile ahead of time. The default locator checks the view lookup the source
+/// generator writes, then the views the app added with <c>Map</c>. A view registered only with the service locator
+/// needs <see cref="ViewModelViewHostUnsafe"/>.
 /// </para>
 /// </remarks>
 /// <example>
@@ -47,100 +59,76 @@ namespace ReactiveUI;
 /// ]]>
 /// </code>
 /// </example>
-[RequiresUnreferencedCode(
-    "This class uses reflection to determine the view model type at runtime, which may be incompatible with trimming.")]
-[RequiresDynamicCode(
-    "If some of the generic arguments are annotated (either with DynamicallyAccessedMembersAttribute, " +
-    "or generic constraints), trimming can't validate that the requirements of those annotations are met.")]
+[DebuggerDisplay("{ViewModel}, {DefaultContent}")]
 public class ViewModelViewHost : ReactiveViewController
 {
-    /// <summary>
-    /// Tracks the currently-adopted view controller and ensures it is disowned on replacement or disposal.
-    /// </summary>
+    /// <summary>Tracks the currently-adopted view controller and ensures it is disowned on replacement or disposal.</summary>
     private readonly SwapDisposable _currentView;
 
-    /// <summary>
-    /// Holds subscriptions created during initialization.
-    /// </summary>
+    /// <summary>Holds subscriptions created during initialization.</summary>
     private readonly DisposableBag _subscriptions;
 
-    /// <summary>
-    /// Holds the subscription to <see cref="ViewContractObservable"/> (the inner observable) and swaps it when the
-    /// property changes.
-    /// </summary>
-    [SuppressMessage("Usage", "CA2213:Disposable fields should be disposed", Justification = "Disposed by _subscriptions")]
+    /// <summary>Holds the subscription to <see cref="ViewContractObservable"/> (the inner observable) and swaps it when the property changes.</summary>
     private readonly SwapDisposable _viewContractObservableSubscription;
 
-    /// <summary>
-    /// Backing field for <see cref="ViewContract"/>. This is updated by observing <see cref="ViewContractObservable"/>
-    /// and is raised as a property change for bindings.
-    /// </summary>
+    /// <summary>Asks a view locator for the view of a view model under a contract.</summary>
+    private readonly Func<IViewLocator, object, string?, IViewFor?> _resolveView;
+
+    /// <summary>Backing field for <see cref="ViewContract"/>. This is updated by observing <see cref="ViewContractObservable"/> and is raised as a property change for bindings.</summary>
     private string? _viewContract;
 
-    /// <summary>
-    /// Backing field for <see cref="ViewLocator"/>.
-    /// </summary>
-    private IViewLocator? _viewLocator;
-
-    /// <summary>
-    /// Backing field for <see cref="DefaultContent"/>.
-    /// </summary>
+    /// <summary>Backing field for <see cref="DefaultContent"/>.</summary>
     private NSViewController? _defaultContent;
 
-    /// <summary>
-    /// Backing field for <see cref="ViewModel"/>.
-    /// </summary>
+    /// <summary>Backing field for <see cref="ViewModel"/>.</summary>
     private object? _viewModel;
 
-    /// <summary>
-    /// Backing field for <see cref="ViewContractObservable"/>.
-    /// </summary>
-    private IObservable<string?>? _viewContractObservable;
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="ViewModelViewHost"/> class.
-    /// </summary>
+    /// <summary>Initializes a new instance of the <see cref="ViewModelViewHost"/> class.</summary>
     public ViewModelViewHost()
+        : this(ResolveViewWithoutReflection)
     {
-        _currentView = new SwapDisposable();
-        _subscriptions = new DisposableBag();
-        _viewContractObservableSubscription = new SwapDisposable();
+    }
+
+    /// <summary>Initializes a new instance of the <see cref="ViewModelViewHost"/> class with its view lookup.</summary>
+    /// <param name="resolveView">Asks a view locator for the view of a view model under a contract.</param>
+    [SuppressMessage("Correctness", "SST2403:Do not let 'this' escape from a constructor", Justification = "Wrappers read this host only after construction; the reference does not outlive it.")]
+    private protected ViewModelViewHost(Func<IViewLocator, object, string?, IViewFor?> resolveView)
+    {
+        _resolveView = resolveView;
+        _currentView = new();
+        _subscriptions = new();
+        _viewContractObservableSubscription = new();
 
         // Drive ViewContract from ViewContractObservable without WhenAny*/expression trees (AOT-trimmer friendly).
         // We always publish an initial null contract to preserve the original StartWith(null) behavior.
         var contractStream = new ObserveOnObservableLocal<string?>(
             new ViewContractStreamObservable(this),
             RxSchedulers.MainThreadScheduler)
-            .Subscribe(SetViewContract);
+            .Subscribe(new DelegateObserver<string?>(SetViewContract));
 
         _subscriptions.Add(contractStream);
-        _subscriptions.Add(_viewContractObservableSubscription);
 
         Initialize();
     }
 
     /// <summary>
-    /// Gets or sets the <see cref="IViewLocator"/> used to resolve views for the current <see cref="ViewModel"/>. Defaults
-    /// to <see cref="ViewLocator.Current"/> if not provided.
+    /// Gets or sets the <see cref="IViewLocator"/> used to resolve views for the current <see cref="ViewModel"/>.
+    /// Defaults to the locator registered in the service locator if not provided.
     /// </summary>
     public IViewLocator? ViewLocator
     {
-        get => _viewLocator;
-        set => this.RaiseAndSetIfChanged(ref _viewLocator, value);
+        get => field;
+        set => this.RaiseAndSetIfChanged(ref field, value);
     }
 
-    /// <summary>
-    /// Gets or sets the controller displayed when <see cref="ViewModel"/> is <see langword="null"/>.
-    /// </summary>
+    /// <summary>Gets or sets the controller displayed when <see cref="ViewModel"/> is <see langword="null"/>.</summary>
     public NSViewController? DefaultContent
     {
         get => _defaultContent;
         set => this.RaiseAndSetIfChanged(ref _defaultContent, value);
     }
 
-    /// <summary>
-    /// Gets or sets the view model whose view should be hosted.
-    /// </summary>
+    /// <summary>Gets or sets the view model whose view should be hosted.</summary>
     public object? ViewModel
     {
         get => _viewModel;
@@ -153,8 +141,8 @@ public class ViewModelViewHost : ReactiveViewController
     /// </summary>
     public IObservable<string?>? ViewContractObservable
     {
-        get => _viewContractObservable;
-        set => this.RaiseAndSetIfChanged(ref _viewContractObservable, value);
+        get => field;
+        set => this.RaiseAndSetIfChanged(ref field, value);
     }
 
     /// <summary>
@@ -178,13 +166,11 @@ public class ViewModelViewHost : ReactiveViewController
         }
 
         _subscriptions.Dispose();
+        _viewContractObservableSubscription.Dispose();
         _currentView.Dispose();
     }
 
-    /// <summary>
-    /// Adds <paramref name="child"/> as a child controller of <paramref name="parent"/> and ensures its view fills
-    /// the parent bounds.
-    /// </summary>
+    /// <summary>Adds <paramref name="child"/> as a child controller of <paramref name="parent"/> and ensures its view fills the parent bounds.</summary>
     /// <param name="parent">The parent controller.</param>
     /// <param name="child">The child controller to adopt.</param>
     /// <exception cref="ArgumentException">Thrown when the parent's view is <see langword="null"/>.</exception>
@@ -234,9 +220,16 @@ public class ViewModelViewHost : ReactiveViewController
 #endif
     }
 
-    /// <summary>
-    /// Removes <paramref name="child"/> from its parent controller and removes its view from the view hierarchy.
-    /// </summary>
+    /// <summary>Finds a view by the view model's run-time type without building any type at run time.</summary>
+    /// <param name="viewLocator">The view locator to ask.</param>
+    /// <param name="viewModel">The view model to find a view for.</param>
+    /// <param name="contract">The contract to resolve under, or <see langword="null"/> for the default view.</param>
+    /// <returns>The view, or <see langword="null"/> when neither the generated lookup nor a <c>Map</c> registration has one.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static IViewFor? ResolveViewWithoutReflection(IViewLocator viewLocator, object viewModel, string? contract) =>
+        viewLocator.ResolveView(viewModel, contract);
+
+    /// <summary>Removes <paramref name="child"/> from its parent controller and removes its view from the view hierarchy.</summary>
     /// <param name="child">The child controller to disown.</param>
     /// <exception cref="ArgumentException">Thrown when the child's view is <see langword="null"/>.</exception>
     private static void Disown(NSViewController child)
@@ -253,14 +246,7 @@ public class ViewModelViewHost : ReactiveViewController
         child.RemoveFromParentViewController();
     }
 
-    /// <summary>
-    /// Initializes reactive subscriptions that drive view resolution and controller swapping.
-    /// </summary>
-    [RequiresUnreferencedCode(
-        "This method uses reflection to determine the view model type at runtime, which may be incompatible with trimming.")]
-    [RequiresDynamicCode(
-        "If some of the generic arguments are annotated (either with DynamicallyAccessedMembersAttribute, " +
-        "or generic constraints), trimming can't validate that the requirements of those annotations are met.")]
+    /// <summary>Initializes reactive subscriptions that drive view resolution and controller swapping.</summary>
     private void Initialize()
     {
         var viewModelChanges = new PropertyObservable<object?>(this, static x => x._viewModel, nameof(ViewModel));
@@ -276,53 +262,59 @@ public class ViewModelViewHost : ReactiveViewController
 
         _subscriptions.Add(
             new ObserveOnObservableLocal<(object? ViewModel, string? Contract)>(viewChange, RxSchedulers.MainThreadScheduler)
-                .Subscribe(
-                    x =>
-                    {
-                        var viewLocator = ViewLocator ?? ReactiveUI.ViewLocator.Current;
-                        var view = viewLocator.ResolveView(x.ViewModel, x.Contract);
-
-                        if (view is null)
-                        {
-                            var message = $"Unable to resolve view for \"{x.ViewModel?.GetType()}\"";
-
-                            if (x.Contract is not null)
-                            {
-                                message += $" and contract \"{x.Contract.GetType()}\"";
-                            }
-
-                            message += ".";
-                            throw new InvalidOperationException(message);
-                        }
-
-                        if (view is not NSViewController viewController)
-                        {
-                            // view?.GetType().FullName may be null when the runtime type name is unavailable; the message still identifies the expected type.
-                            throw new InvalidOperationException($"Resolved view type '{view?.GetType().FullName}' is not a '{typeof(NSViewController).FullName}'.");
-                        }
-
-                        view.ViewModel = x.ViewModel;
-                        Adopt(this, viewController);
-
-                        _currentView.Disposable =
-                            new DisposableBag(
-                                viewController,
-                                new ActionDisposable(() => Disown(viewController)));
-                    }));
+                .Subscribe(new DelegateObserver<(object? ViewModel, string? Contract)>(ShowView)));
 
         _subscriptions.Add(
             new ObserveOnObservableLocal<NSViewController?>(defaultViewChange, RxSchedulers.MainThreadScheduler)
-                .Subscribe(x => Adopt(this, x)));
+                .Subscribe(new DelegateObserver<NSViewController?>(x => Adopt(this, x))));
     }
 
-    /// <summary>
-    /// Updates the <see cref="ViewContract"/> backing field and raises property changed notifications.
-    /// </summary>
-    /// <param name="contract">The new contract value.</param>
-    private void SetViewContract(string? contract)
+    /// <summary>Resolves the view for a view model and contract pair and hosts it as the child controller.</summary>
+    /// <param name="x">The view model and contract to resolve a view for.</param>
+    /// <exception cref="InvalidOperationException">Thrown when no view is found, or when the view is not a view controller.</exception>
+    private void ShowView((object? ViewModel, string? Contract) x)
     {
-        this.RaiseAndSetIfChanged(ref _viewContract, contract, nameof(ViewContract));
+        // ViewModelContractObservable forwards only non-null view models.
+        if (x.ViewModel is not { } viewModel)
+        {
+            return;
+        }
+
+        var view = _resolveView(ViewLocator ?? GetCurrent(), viewModel, x.Contract);
+
+        if (view is null)
+        {
+            var message = $"Unable to resolve view for \"{viewModel.GetType()}\"";
+
+            if (x.Contract is not null)
+            {
+                message += $" and contract \"{x.Contract.GetType()}\"";
+            }
+
+            message += ". The view locator checked the generated view lookup and its Map registrations; "
+                + $"use {nameof(ViewModelViewHostUnsafe)} to also resolve a view registered only with the service locator.";
+            throw new InvalidOperationException(message);
+        }
+
+        if (view is not NSViewController viewController)
+        {
+            // view.GetType().FullName may be null when the runtime type name is unavailable; the message still identifies the expected type.
+            throw new InvalidOperationException($"Resolved view type '{view.GetType().FullName}' is not a '{typeof(NSViewController).FullName}'.");
+        }
+
+        view.ViewModel = viewModel;
+        Adopt(this, viewController);
+
+        // The bag disposes in order: take the controller out of the hierarchy first, then dispose it.
+        _currentView.Disposable =
+            new DisposableBag(
+                new ActionDisposable(() => Disown(viewController)),
+                viewController);
     }
+
+    /// <summary>Updates the <see cref="ViewContract"/> backing field and raises property changed notifications.</summary>
+    /// <param name="contract">The new contract value.</param>
+    private void SetViewContract(string? contract) => ViewContract = contract;
 
     /// <summary>
     /// Observes a property on this <see cref="ViewModelViewHost"/> instance. Emits the current value immediately on
@@ -350,10 +342,7 @@ public class ViewModelViewHost : ReactiveViewController
             return host.Changed.Subscribe(new Sink(observer, host, getter, propertyName));
         }
 
-        /// <summary>
-        /// Filters property-changed events to the target property name, then projects each event to the current
-        /// property value.
-        /// </summary>
+        /// <summary>Filters property-changed events to the target property name, then projects each event to the current property value.</summary>
         /// <param name="downstream">The downstream observer.</param>
         /// <param name="host">The host instance.</param>
         /// <param name="getter">Returns the current property value.</param>
@@ -387,9 +376,11 @@ public class ViewModelViewHost : ReactiveViewController
             }
 
             /// <inheritdoc/>
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public void OnError(Exception error) => downstream.OnError(error);
 
             /// <inheritdoc/>
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public void OnCompleted() => downstream.OnCompleted();
         }
     }
@@ -411,20 +402,18 @@ public class ViewModelViewHost : ReactiveViewController
             // Preserve the previous StartWith((string?)null) semantics.
             observer.OnNext(null);
 
-            void SwapInner(IObservable<string?>? source)
-            {
+            void SwapInner(IObservable<string?>? source) =>
                 host._viewContractObservableSubscription.Disposable =
                     source is null
                         ? EmptyDisposable.Instance
                         : source.Subscribe(observer);
-            }
 
             // Subscribe to the initial observable (if any).
             SwapInner(host.ViewContractObservable);
 
             // Listen for property changes and rewire the inner subscription.
             // Single Where operator — no chain to fuse.
-            return new WhereObservableLocal<IReactivePropertyChangedEventArgs<IReactiveObject>>(
+            return new KeepSignal<IReactivePropertyChangedEventArgs<IReactiveObject>>(
                 host.Changed,
                 static e => e.PropertyName == nameof(ViewContractObservable))
                 .Subscribe(new DelegateObserver<IReactivePropertyChangedEventArgs<IReactiveObject>>(
@@ -479,7 +468,7 @@ public class ViewModelViewHost : ReactiveViewController
             private bool _hasContract;
 
             /// <summary>The view-model source subscription.</summary>
-            private IDisposable? _vmSubscription;
+            private IDisposable? _viewModelSubscription;
 
             /// <summary>The contract source subscription.</summary>
             private IDisposable? _contractSubscription;
@@ -489,14 +478,14 @@ public class ViewModelViewHost : ReactiveViewController
             /// <param name="contractChanges">The contract property stream.</param>
             public void Run(IObservable<object?> viewModelChanges, IObservable<string?> contractChanges)
             {
-                _vmSubscription = viewModelChanges.Subscribe(new ViewModelObserver(this));
+                _viewModelSubscription = viewModelChanges.Subscribe(new ViewModelObserver(this));
                 _contractSubscription = contractChanges.Subscribe(new ContractObserver(this));
             }
 
             /// <inheritdoc/>
             public void Dispose()
             {
-                _vmSubscription?.Dispose();
+                _viewModelSubscription?.Dispose();
                 _contractSubscription?.Dispose();
             }
 
@@ -524,10 +513,7 @@ public class ViewModelViewHost : ReactiveViewController
                 }
             }
 
-            /// <summary>
-            /// Emits the combined pair when both sources have produced a value and the view model is non-null.
-            /// Caller must hold <see cref="_gate"/>.
-            /// </summary>
+            /// <summary>Emits the combined pair when both sources have produced a value and the view model is non-null. Caller must hold <see cref="_gate"/>.</summary>
             private void Emit()
             {
                 if (!_hasViewModel || !_hasContract || _viewModel is null)
@@ -553,9 +539,11 @@ public class ViewModelViewHost : ReactiveViewController
             private sealed class ViewModelObserver(Sink parent) : IObserver<object?>
             {
                 /// <inheritdoc/>
+                [MethodImpl(MethodImplOptions.AggressiveInlining)]
                 public void OnNext(object? value) => parent.OnViewModel(value);
 
                 /// <inheritdoc/>
+                [MethodImpl(MethodImplOptions.AggressiveInlining)]
                 public void OnError(Exception error) => parent.OnError(error);
 
                 /// <inheritdoc/>
@@ -569,9 +557,11 @@ public class ViewModelViewHost : ReactiveViewController
             private sealed class ContractObserver(Sink parent) : IObserver<string?>
             {
                 /// <inheritdoc/>
+                [MethodImpl(MethodImplOptions.AggressiveInlining)]
                 public void OnNext(string? value) => parent.OnContract(value);
 
                 /// <inheritdoc/>
+                [MethodImpl(MethodImplOptions.AggressiveInlining)]
                 public void OnError(Exception error) => parent.OnError(error);
 
                 /// <inheritdoc/>
@@ -630,7 +620,7 @@ public class ViewModelViewHost : ReactiveViewController
             private bool _hasDefaultContent;
 
             /// <summary>The view-model source subscription.</summary>
-            private IDisposable? _vmSubscription;
+            private IDisposable? _viewModelSubscription;
 
             /// <summary>The default-content source subscription.</summary>
             private IDisposable? _defaultContentSubscription;
@@ -640,14 +630,14 @@ public class ViewModelViewHost : ReactiveViewController
             /// <param name="defaultContentChanges">The default-content property stream.</param>
             public void Run(IObservable<object?> viewModelChanges, IObservable<NSViewController?> defaultContentChanges)
             {
-                _vmSubscription = viewModelChanges.Subscribe(new ViewModelObserver(this));
+                _viewModelSubscription = viewModelChanges.Subscribe(new ViewModelObserver(this));
                 _defaultContentSubscription = defaultContentChanges.Subscribe(new DefaultContentObserver(this));
             }
 
             /// <inheritdoc/>
             public void Dispose()
             {
-                _vmSubscription?.Dispose();
+                _viewModelSubscription?.Dispose();
                 _defaultContentSubscription?.Dispose();
             }
 
@@ -705,9 +695,11 @@ public class ViewModelViewHost : ReactiveViewController
             private sealed class ViewModelObserver(Sink parent) : IObserver<object?>
             {
                 /// <inheritdoc/>
+                [MethodImpl(MethodImplOptions.AggressiveInlining)]
                 public void OnNext(object? value) => parent.OnViewModel(value);
 
                 /// <inheritdoc/>
+                [MethodImpl(MethodImplOptions.AggressiveInlining)]
                 public void OnError(Exception error) => parent.OnError(error);
 
                 /// <inheritdoc/>
@@ -721,9 +713,11 @@ public class ViewModelViewHost : ReactiveViewController
             private sealed class DefaultContentObserver(Sink parent) : IObserver<NSViewController?>
             {
                 /// <inheritdoc/>
+                [MethodImpl(MethodImplOptions.AggressiveInlining)]
                 public void OnNext(NSViewController? value) => parent.OnDefaultContent(value);
 
                 /// <inheritdoc/>
+                [MethodImpl(MethodImplOptions.AggressiveInlining)]
                 public void OnError(Exception error) => parent.OnError(error);
 
                 /// <inheritdoc/>
@@ -741,7 +735,7 @@ public class ViewModelViewHost : ReactiveViewController
     /// <typeparam name="T">The element type.</typeparam>
     /// <param name="source">The source observable.</param>
     /// <param name="scheduler">The scheduler on which to deliver notifications.</param>
-    private sealed class ObserveOnObservableLocal<T>(IObservable<T> source, IScheduler scheduler) : IObservable<T>
+    private sealed class ObserveOnObservableLocal<T>(IObservable<T> source, ISequencer scheduler) : IObservable<T>
     {
         /// <inheritdoc/>
         public IDisposable Subscribe(IObserver<T> observer)
@@ -754,9 +748,10 @@ public class ViewModelViewHost : ReactiveViewController
         /// <summary>Reschedules each notification onto the scheduler.</summary>
         /// <param name="downstream">The downstream observer.</param>
         /// <param name="scheduler">The scheduler each notification is delivered on.</param>
-        private sealed class Sink(IObserver<T> downstream, IScheduler scheduler) : IObserver<T>
+        private sealed class Sink(IObserver<T> downstream, ISequencer scheduler) : IObserver<T>
         {
             /// <inheritdoc/>
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public void OnNext(T value) =>
                 scheduler.ScheduleOrInline((Downstream: downstream, Value: value), static (_, state) =>
                 {
@@ -765,6 +760,7 @@ public class ViewModelViewHost : ReactiveViewController
                 });
 
             /// <inheritdoc/>
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public void OnError(Exception error) =>
                 scheduler.ScheduleOrInline((Downstream: downstream, Error: error), static (_, state) =>
                 {
@@ -773,53 +769,13 @@ public class ViewModelViewHost : ReactiveViewController
                 });
 
             /// <inheritdoc/>
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public void OnCompleted() =>
                 scheduler.ScheduleOrInline(downstream, static (_, observer) =>
                 {
                     observer.OnCompleted();
                     return EmptyDisposable.Instance;
                 });
-        }
-    }
-
-    /// <summary>
-    /// Forwards only values that satisfy a predicate. Local copy of <c>WhereObservable</c> for use within the
-    /// platform-specific build that excludes <c>Shared/Platform</c>.
-    /// </summary>
-    /// <typeparam name="T">The element type.</typeparam>
-    /// <param name="source">The source to filter.</param>
-    /// <param name="predicate">Returns <see langword="true"/> for values that should be forwarded.</param>
-    private sealed class WhereObservableLocal<T>(IObservable<T> source, Func<T, bool> predicate) : IObservable<T>
-    {
-        /// <inheritdoc/>
-        public IDisposable Subscribe(IObserver<T> observer)
-        {
-            ArgumentExceptionHelper.ThrowIfNull(observer);
-
-            return source.Subscribe(new Sink(observer, predicate));
-        }
-
-        /// <summary>Forwards values that satisfy the predicate.</summary>
-        /// <param name="downstream">The downstream observer.</param>
-        /// <param name="predicate">The filter predicate.</param>
-        private sealed class Sink(IObserver<T> downstream, Func<T, bool> predicate) : IObserver<T>
-        {
-            /// <inheritdoc/>
-            public void OnNext(T value)
-            {
-                if (!predicate(value))
-                {
-                    return;
-                }
-
-                downstream.OnNext(value);
-            }
-
-            /// <inheritdoc/>
-            public void OnError(Exception error) => downstream.OnError(error);
-
-            /// <inheritdoc/>
-            public void OnCompleted() => downstream.OnCompleted();
         }
     }
 }

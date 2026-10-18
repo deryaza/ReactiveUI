@@ -3,9 +3,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
 
-using System.Reactive;
-using System.Reactive.Concurrency;
-using System.Reactive.Linq;
+using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using BenchmarkDotNet.Attributes;
 
 namespace ReactiveUI.Benchmarks;
@@ -16,26 +15,28 @@ namespace ReactiveUI.Benchmarks;
 /// </summary>
 [MemoryDiagnoser]
 [MarkdownExporterAttribute.GitHub]
+[DebuggerDisplay("CreateFromObservableBenchmarks")]
 public class CreateFromObservableBenchmarks
 {
     /// <summary>The number of executions per benchmark.</summary>
     private const int ExecuteCount = 10_000;
 
     /// <summary>Sink for the command results.</summary>
-    private readonly NoopObserver<Unit> _sink = new();
+    private readonly NoopObserver<RxVoid> _sink = new();
 
     /// <summary>The observable-backed command under test.</summary>
-    private ReactiveCommand<Unit, Unit> _command = null!;
+    private ReactiveCommand<RxVoid, RxVoid> _command = null!;
 
     /// <summary>Creates an observable-backed command on the immediate scheduler.</summary>
     [GlobalSetup]
     public void Setup() =>
         _command = ReactiveCommand.CreateFromObservable(
-            static () => Observable.Return(Unit.Default),
-            outputScheduler: ImmediateScheduler.Instance);
+            static () => Signal.Emit(RxVoid.Default),
+            outputScheduler: Sequencer.Immediate);
 
     /// <summary>Disposes the command.</summary>
     [GlobalCleanup]
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Cleanup() => _command.Dispose();
 
     /// <summary>Measures repeated execution of the observable-backed command.</summary>

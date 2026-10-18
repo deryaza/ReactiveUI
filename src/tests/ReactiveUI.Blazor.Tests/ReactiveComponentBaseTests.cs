@@ -3,26 +3,18 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
 
-using System.Reactive.Disposables;
-using System.Reactive.Disposables.Fluent;
-using Bunit;
-
 namespace ReactiveUI.Blazor.Tests;
 
 /// <summary>
 /// Tests for the <see cref="ReactiveComponentBase{T}"/> class.
 /// These tests verify proper rendering, property change handling, and activation logic within a Blazor environment.
 /// </summary>
-public class ReactiveComponentBaseTests : BunitContext
+public class ReactiveComponentBaseTests : BlazorTestContext
 {
-    /// <summary>
-    /// The expected number of renders after the initial render of the component.
-    /// </summary>
+    /// <summary>The expected number of renders after the initial render of the component.</summary>
     private const int ExpectedRenderCount = 2;
 
-    /// <summary>
-    /// The delay in milliseconds allowed for the asynchronous UI update to settle.
-    /// </summary>
+    /// <summary>The delay in milliseconds allowed for the asynchronous UI update to settle.</summary>
     private const int RenderDelayMilliseconds = 100;
 
     /// <summary>
@@ -34,7 +26,7 @@ public class ReactiveComponentBaseTests : BunitContext
     public async Task ViewModel_Change_Triggers_StateHasChanged()
     {
         var viewModel = new TestViewModel();
-        var cut = Render<TestComponent>(parameters => parameters.Add(p => p.ViewModel, viewModel));
+        var cut = await RenderAsync<TestComponent>(parameters => parameters.Add(p => p.ViewModel, viewModel));
 
         // Initial render should have occurred once.
         await Assert.That(cut.Instance.RenderCount).IsEqualTo(ExpectedRenderCount);
@@ -57,12 +49,12 @@ public class ReactiveComponentBaseTests : BunitContext
     public async Task ViewModel_Instance_Change_Triggers_StateHasChanged()
     {
         var viewModel1 = new TestViewModel();
-        var cut = Render<TestComponent>(parameters => parameters.Add(p => p.ViewModel, viewModel1));
+        var cut = await RenderAsync<TestComponent>(parameters => parameters.Add(p => p.ViewModel, viewModel1));
 
         await Assert.That(cut.Instance.RenderCount).IsEqualTo(ExpectedRenderCount);
 
         var viewModel2 = new TestViewModel();
-        cut.Render(parameters => parameters.Add(p => p.ViewModel, viewModel2));
+        await cut.RenderAsync(parameters => parameters.Add(p => p.ViewModel, viewModel2));
 
         // Wait for the asynchronous update triggered by the property setter.
         await Task.Delay(RenderDelayMilliseconds);
@@ -78,7 +70,7 @@ public class ReactiveComponentBaseTests : BunitContext
     public async Task Activation_Works()
     {
         var viewModel = new TestActivatableViewModel();
-        var cut = Render<TestActivatableComponent>(parameters => parameters.Add(p => p.ViewModel, viewModel));
+        var cut = await RenderAsync<TestActivatableComponent>(parameters => parameters.Add(p => p.ViewModel, viewModel));
 
         // The ViewModel should be active immediately after the component is rendered.
         await Assert.That(viewModel.IsActive).IsTrue();
@@ -88,51 +80,36 @@ public class ReactiveComponentBaseTests : BunitContext
         await Assert.That(viewModel.IsActive).IsFalse();
     }
 
-    /// <summary>
-    /// A simple ReactiveObject ViewModel for testing property change notifications.
-    /// </summary>
+    /// <summary>A simple ReactiveObject ViewModel for testing property change notifications.</summary>
     public class TestViewModel : ReactiveObject
     {
-        /// <summary>
-        /// The backing field for the <see cref="SomeProperty"/> property.
-        /// </summary>
-        private string? _someProperty;
-
-        /// <summary>
-        /// Gets or sets a test property that raises INotifyPropertyChanged events.
-        /// </summary>
+        /// <summary>Gets or sets a test property that raises INotifyPropertyChanged events.</summary>
         public string? SomeProperty
         {
-            get => _someProperty;
-            set => this.RaiseAndSetIfChanged(ref _someProperty, value);
+            get;
+            set => this.RaiseAndSetIfChanged(ref field, value);
         }
     }
 
-    /// <summary>
-    /// A test ViewModel implementing IActivatableViewModel to verify activation lifecycle.
-    /// </summary>
-    public class TestActivatableViewModel : ReactiveObject, IActivatableViewModel
+    /// <summary>A test ViewModel implementing IActivatableViewModel to verify activation lifecycle.</summary>
+    public sealed class TestActivatableViewModel : ReactiveObject, IActivatableViewModel, IDisposable
     {
-        /// <summary>
-        /// Initializes a new instance of the <see cref="TestActivatableViewModel"/> class.
-        /// Sets up the WhenActivated block to toggle the IsActive flag.
-        /// </summary>
+        /// <summary>Initializes a new instance of the <see cref="TestActivatableViewModel"/> class. Sets up the WhenActivated block to toggle the IsActive flag.</summary>
         public TestActivatableViewModel() =>
             this.WhenActivated(d =>
             {
                 IsActive = true;
-                Disposable.Create(() => IsActive = false).DisposeWith(d);
+                _ = new ActionDisposable(() => IsActive = false).DisposeWith(d);
             });
 
-        /// <summary>
-        /// Gets the ViewModelActivator required for activation logic.
-        /// </summary>
+        /// <summary>Gets the ViewModelActivator required for activation logic.</summary>
         public ViewModelActivator Activator { get; } = new();
 
-        /// <summary>
-        /// Gets a value indicating whether the ViewModel is currently active.
-        /// </summary>
+        /// <summary>Gets a value indicating whether the ViewModel is currently active.</summary>
         public bool IsActive { get; private set; }
+
+        /// <inheritdoc/>
+        public void Dispose() => Activator.Dispose();
     }
 
     /// <summary>
@@ -141,9 +118,7 @@ public class ReactiveComponentBaseTests : BunitContext
     /// </summary>
     public class TestComponent : ReactiveComponentBase<TestViewModel>
     {
-        /// <summary>
-        /// Gets the number of times OnAfterRender has been called.
-        /// </summary>
+        /// <summary>Gets the number of times OnAfterRender has been called.</summary>
         public int RenderCount { get; private set; }
 
         /// <inheritdoc/>
@@ -154,8 +129,6 @@ public class ReactiveComponentBaseTests : BunitContext
         }
     }
 
-    /// <summary>
-    /// A concrete implementation of ReactiveComponentBase for testing activatable ViewModels.
-    /// </summary>
+    /// <summary>A concrete implementation of ReactiveComponentBase for testing activatable ViewModels.</summary>
     public class TestActivatableComponent : ReactiveComponentBase<TestActivatableViewModel>;
 }

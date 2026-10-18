@@ -1,0 +1,168 @@
+// Copyright (c) 2009-2026 .NET Foundation and Contributors. All rights reserved.
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+// See the LICENSE file in the project root for full license information.
+
+using System.ComponentModel;
+using System.ComponentModel.DataAnnotations;
+using System.Diagnostics;
+using System.Runtime.CompilerServices;
+using System.Runtime.Serialization;
+using System.Text;
+using System.Text.Json.Serialization;
+
+#if REACTIVE_SHIM
+namespace ReactiveUI.Reactive;
+#else
+namespace ReactiveUI;
+#endif
+/// <summary>
+/// ReactiveObject is the base object for ViewModel classes, and it
+/// implements INotifyPropertyChanged. In addition, ReactiveObject provides
+/// Changing and Changed Observables to monitor object changes.
+/// </summary>
+[DataContract]
+[DebuggerDisplay("{Changing}, {Changed}")]
+public abstract record ReactiveRecord : IReactiveNotifyPropertyChanged<IReactiveObject>, IHandleObservableErrors, IReactiveObject
+{
+    /// <summary>Tracks whether property-changing event subscriptions have been set up.</summary>
+    private bool _propertyChangingEventsSubscribed;
+
+    /// <summary>Tracks whether property-changed event subscriptions have been set up.</summary>
+    private bool _propertyChangedEventsSubscribed;
+
+    /// <summary>Backing event store for property-changing notifications.</summary>
+    private PropertyChangingEventHandler? _propertyChangingHandler;
+
+    /// <summary>Backing event store for property-changed notifications.</summary>
+    private PropertyChangedEventHandler? _propertyChangedHandler;
+
+    /// <summary>Stores the property-changing observable.</summary>
+    private IObservable<IReactivePropertyChangedEventArgs<IReactiveObject>>? _changing;
+
+    /// <summary>Stores the property-changed observable.</summary>
+    private IObservable<IReactivePropertyChangedEventArgs<IReactiveObject>>? _changed;
+
+    /// <summary>Stores the exception observable.</summary>
+    private IObservable<Exception>? _thrownExceptions;
+
+    /// <inheritdoc/>
+    public event PropertyChangingEventHandler? PropertyChanging
+    {
+        add => AddPropertyChanging(value);
+        remove => RemovePropertyChanging(value);
+    }
+
+    /// <inheritdoc/>
+    public event PropertyChangedEventHandler? PropertyChanged
+    {
+        add => AddPropertyChanged(value);
+        remove => RemovePropertyChanged(value);
+    }
+
+    /// <inheritdoc />
+    [IgnoreDataMember]
+    [JsonIgnore]
+#if !MONO
+    [Browsable(false)]
+    [Display(Order = -1, AutoGenerateField = false, AutoGenerateFilter = false)]
+#endif
+    public IObservable<IReactivePropertyChangedEventArgs<IReactiveObject>> Changing => GetChanging();
+
+    /// <inheritdoc />
+    [IgnoreDataMember]
+    [JsonIgnore]
+#if !MONO
+    [Browsable(false)]
+    [Display(Order = -1, AutoGenerateField = false, AutoGenerateFilter = false)]
+#endif
+    public IObservable<IReactivePropertyChangedEventArgs<IReactiveObject>> Changed => GetChanged();
+
+    /// <inheritdoc/>
+    [IgnoreDataMember]
+    [JsonIgnore]
+#if !MONO
+    [Browsable(false)]
+    [Display(Order = -1, AutoGenerateField = false, AutoGenerateFilter = false)]
+#endif
+    public IObservable<Exception> ThrownExceptions => GetThrownExceptions();
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    void IReactiveObject.RaisePropertyChanging(PropertyChangingEventArgs args) =>
+        _propertyChangingHandler?.Invoke(this, args);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    void IReactiveObject.RaisePropertyChanged(PropertyChangedEventArgs args) =>
+        _propertyChangedHandler?.Invoke(this, args);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public IDisposable SuppressChangeNotifications() => IReactiveObjectExtensions.SuppressChangeNotifications(this);
+
+    /// <summary>Determines if change notifications are enabled or not.</summary>
+    /// <returns>A value indicating whether change notifications are enabled.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool AreChangeNotificationsEnabled() => IReactiveObjectExtensions.AreChangeNotificationsEnabled(this);
+
+    /// <summary>
+    /// Compares only the record type. The notification state held by this base record is not data,
+    /// so a derived record's value equality covers its own members only.
+    /// </summary>
+    /// <param name="other">The record to compare with.</param>
+    /// <returns><see langword="true"/> if <paramref name="other"/> is the same record type; otherwise <see langword="false"/>.</returns>
+    public virtual bool Equals(ReactiveRecord? other) =>
+        ReferenceEquals(this, other) || (other is not null && EqualityContract == other.EqualityContract);
+
+    /// <inheritdoc/>
+    public override int GetHashCode() => EqualityContract.GetHashCode();
+
+    /// <summary>Delays notifications until the return IDisposable is disposed.</summary>
+    /// <returns>A disposable which when disposed will send delayed notifications.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public IDisposable DelayChangeNotifications() => IReactiveObjectExtensions.DelayChangeNotifications(this);
+
+    /// <summary>Prints no members, so a derived record's ToString shows only its own members.</summary>
+    /// <param name="builder">The builder the derived record writes its members to.</param>
+    /// <returns><see langword="false"/>, because this record prints no members.</returns>
+    protected virtual bool PrintMembers(StringBuilder builder) => false;
+
+    /// <summary>Adds a property-changing event handler.</summary>
+    /// <param name="handler">The handler to add.</param>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private void AddPropertyChanging(PropertyChangingEventHandler? handler) =>
+        ReactiveNotificationHelpers.AddPropertyChanging(this, ref _propertyChangingEventsSubscribed, ref _propertyChangingHandler, handler);
+
+    /// <summary>Removes a property-changing event handler.</summary>
+    /// <param name="handler">The handler to remove.</param>
+    private void RemovePropertyChanging(PropertyChangingEventHandler? handler) => _propertyChangingHandler -= handler;
+
+    /// <summary>Adds a property-changed event handler.</summary>
+    /// <param name="handler">The handler to add.</param>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private void AddPropertyChanged(PropertyChangedEventHandler? handler) =>
+        ReactiveNotificationHelpers.AddPropertyChanged(this, ref _propertyChangedEventsSubscribed, ref _propertyChangedHandler, handler);
+
+    /// <summary>Removes a property-changed event handler.</summary>
+    /// <param name="handler">The handler to remove.</param>
+    private void RemovePropertyChanged(PropertyChangedEventHandler? handler) => _propertyChangedHandler -= handler;
+
+    /// <summary>Gets the property-changing observable.</summary>
+    /// <returns>The property-changing observable.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private IObservable<IReactivePropertyChangedEventArgs<IReactiveObject>> GetChanging() =>
+        ReactiveNotificationHelpers.GetChanging(this, ref _changing);
+
+    /// <summary>Gets the property-changed observable.</summary>
+    /// <returns>The property-changed observable.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private IObservable<IReactivePropertyChangedEventArgs<IReactiveObject>> GetChanged() =>
+        ReactiveNotificationHelpers.GetChanged(this, ref _changed);
+
+    /// <summary>Gets the exception observable.</summary>
+    /// <returns>The exception observable.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private IObservable<Exception> GetThrownExceptions() =>
+        ReactiveNotificationHelpers.GetThrownExceptions(this, ref _thrownExceptions);
+}

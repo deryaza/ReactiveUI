@@ -3,47 +3,14 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
 
-using System.ComponentModel;
 using System.Reflection;
 
 namespace ReactiveUI.Tests.Core;
 
-/// <summary>
-///     Tests for ReactiveUI attribute types.
-/// </summary>
+/// <summary>Tests for ReactiveUI attribute types.</summary>
 public class AttributeTests
 {
-    /// <summary>
-    ///     Tests that LocalizableAttribute stores false value correctly.
-    /// </summary>
-    /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
-    [Test]
-    public async Task LocalizableAttribute_FalseValue_StoresFalse()
-    {
-        // Act
-        var attribute = new LocalizableAttribute(false);
-
-        // Assert
-        await Assert.That(attribute.IsLocalizable).IsFalse();
-    }
-
-    /// <summary>
-    ///     Tests that LocalizableAttribute stores true value correctly.
-    /// </summary>
-    /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
-    [Test]
-    public async Task LocalizableAttribute_TrueValue_StoresTrue()
-    {
-        // Act
-        var attribute = new LocalizableAttribute(true);
-
-        // Assert
-        await Assert.That(attribute.IsLocalizable).IsTrue();
-    }
-
-    /// <summary>
-    ///     Tests that PreserveAttribute can be instantiated.
-    /// </summary>
+    /// <summary>Tests that PreserveAttribute can be instantiated.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task PreserveAttribute_Constructor_CreatesInstance()
@@ -56,27 +23,20 @@ public class AttributeTests
         await Assert.That(attribute).IsTypeOf<PreserveAttribute>();
     }
 
-    /// <summary>
-    ///     Tests that SingleInstanceViewAttribute has correct AttributeUsage.
-    /// </summary>
+    /// <summary>Tests that SingleInstanceViewAttribute has correct AttributeUsage.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task SingleInstanceViewAttribute_AttributeUsage_IsClass()
     {
-        // Arrange
-        var attributeType = typeof(SingleInstanceViewAttribute);
-
         // Act
-        var attributeUsage = attributeType.GetCustomAttribute<AttributeUsageAttribute>();
+        var attributeUsage = (typeof(SingleInstanceViewAttribute)).GetCustomAttribute<AttributeUsageAttribute>();
 
         // Assert
         await Assert.That(attributeUsage).IsNotNull();
         await Assert.That(attributeUsage!.ValidOn).IsEqualTo(AttributeTargets.Class);
     }
 
-    /// <summary>
-    ///     Tests that SingleInstanceViewAttribute can be instantiated.
-    /// </summary>
+    /// <summary>Tests that SingleInstanceViewAttribute can be instantiated.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task SingleInstanceViewAttribute_Constructor_CreatesInstance()
@@ -89,27 +49,20 @@ public class AttributeTests
         await Assert.That(attribute).IsTypeOf<SingleInstanceViewAttribute>();
     }
 
-    /// <summary>
-    ///     Tests that ViewContractAttribute has correct AttributeUsage.
-    /// </summary>
+    /// <summary>Tests that ViewContractAttribute has correct AttributeUsage.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task ViewContractAttribute_AttributeUsage_IsClass()
     {
-        // Arrange
-        var attributeType = typeof(ViewContractAttribute);
-
         // Act
-        var attributeUsage = attributeType.GetCustomAttribute<AttributeUsageAttribute>();
+        var attributeUsage = (typeof(ViewContractAttribute)).GetCustomAttribute<AttributeUsageAttribute>();
 
         // Assert
         await Assert.That(attributeUsage).IsNotNull();
         await Assert.That(attributeUsage!.ValidOn).IsEqualTo(AttributeTargets.Class);
     }
 
-    /// <summary>
-    ///     Tests that ViewContractAttribute correctly stores contract value.
-    /// </summary>
+    /// <summary>Tests that ViewContractAttribute correctly stores contract value.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task ViewContractAttribute_Constructor_StoresContractValue()
@@ -124,9 +77,7 @@ public class AttributeTests
         await Assert.That(attribute.Contract).IsEqualTo(ExpectedContract);
     }
 
-    /// <summary>
-    ///     Tests that ViewContractAttribute handles null contract.
-    /// </summary>
+    /// <summary>Tests that ViewContractAttribute handles null contract.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task ViewContractAttribute_NullContract_StoresNull()

@@ -3,7 +3,11 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
 
+#if REACTIVE_SHIM
+using ReactiveUI.Reactive.Builder;
+#else
 using ReactiveUI.Builder;
+#endif
 using ReactiveUI.Tests.Utilities.AppBuilder;
 using Splat;
 
@@ -39,7 +43,7 @@ public class LoggingRegistrationExecutor : BaseAppBuilderTestExecutor
         context.StateBag["TestLogManager"] = currentLogManager;
 
         // Configure builder with logging registration and core services
-        builder
+        _ = builder
             .WithRegistration(r => r.Register<ILogManager>(() => currentLogManager))
             .WithCoreServices();
     }

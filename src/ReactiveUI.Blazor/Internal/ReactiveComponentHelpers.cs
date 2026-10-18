@@ -4,13 +4,15 @@
 // See the LICENSE file in the project root for full license information.
 
 using System.ComponentModel;
-using System.Reactive;
-using System.Reactive.Disposables.Fluent;
 using Microsoft.AspNetCore.Components;
 using ReactiveUI.Internal;
+using ReactiveUI.Primitives;
 
+#if REACTIVE_SHIM
+namespace ReactiveUI.Reactive.Blazor.Internal;
+#else
 namespace ReactiveUI.Blazor.Internal;
-
+#endif
 /// <summary>
 /// Internal helper methods for reactive Blazor components.
 /// Provides shared functionality for activation wiring and view model change reactivity.
@@ -27,21 +29,19 @@ namespace ReactiveUI.Blazor.Internal;
 /// </remarks>
 internal static class ReactiveComponentHelpers
 {
-    /// <summary>
-    /// Wires ReactiveUI activation semantics to the specified view model if it implements <see cref="IActivatableViewModel"/>.
-    /// </summary>
+    /// <summary>Wires ReactiveUI activation semantics to the specified view model if it implements <see cref="IActivatableViewModel"/>.</summary>
     /// <typeparam name="T">The view model type that implements <see cref="INotifyPropertyChanged"/>.</typeparam>
     /// <param name="viewModel">The view model to wire activation for.</param>
     /// <param name="state">The reactive component state that provides activation/deactivation observables.</param>
+    /// <exception cref="ArgumentNullException">
+    /// Thrown when <paramref name="viewModel"/> or <paramref name="state"/> is <see langword="null"/>.
+    /// </exception>
     /// <remarks>
     /// When the component is activated, the view model's <see cref="ViewModelActivator"/> is triggered; when the
     /// component is deactivated, the activator is deactivated. The activation subscription is tracked by
     /// <see cref="ReactiveComponentState.LifetimeDisposables"/> so it is disposed with the component.
     /// </remarks>
-    /// <exception cref="ArgumentNullException">
-    /// Thrown when <paramref name="viewModel"/> or <paramref name="state"/> is <see langword="null"/>.
-    /// </exception>
-    public static void WireActivationIfSupported<T>(T? viewModel, ReactiveComponentState state)
+    internal static void WireActivationIfSupported<T>(T? viewModel, ReactiveComponentState state)
         where T : class, INotifyPropertyChanged
     {
         ArgumentNullException.ThrowIfNull(state);
@@ -52,12 +52,12 @@ internal static class ReactiveComponentHelpers
         }
 
         // Subscribe to component activation and trigger view model activation.
-        state.Activated
-            .Subscribe(new DelegateObserver<Unit>(_ => avm.Activator.Activate()))
+        _ = state.Activated
+            .Subscribe(new DelegateObserver<RxVoid>(_ => avm.Activator.Activate()))
             .DisposeWith(state.LifetimeDisposables);
 
         // Deactivation subscription does not need disposal tracking beyond component lifetime.
-        state.Deactivated.Subscribe(new DelegateObserver<Unit>(_ => avm.Activator.Deactivate()));
+        _ = state.Deactivated.Subscribe(new DelegateObserver<RxVoid>(_ => avm.Activator.Deactivate()));
     }
 
     /// <summary>
@@ -83,13 +83,13 @@ internal static class ReactiveComponentHelpers
     /// A disposable that tears down all subscriptions when disposed. Should be assigned to
     /// <see cref="ReactiveComponentState.FirstRenderSubscriptions"/>.
     /// </returns>
+    /// <exception cref="ArgumentNullException">Thrown when any parameter is <see langword="null"/>.</exception>
     /// <remarks>
     /// Re-renders when the view model instance is reassigned (after the first assignment) and whenever the current
     /// view model raises any property change, implemented as a single fused
     /// <see cref="ViewModelReactivitySink{T}"/> rather than an operator pipeline.
     /// </remarks>
-    /// <exception cref="ArgumentNullException">Thrown when any parameter is <see langword="null"/>.</exception>
-    public static IDisposable WireViewModelChangeReactivity<T>(
+    internal static IDisposable WireViewModelChangeReactivity<T>(
         Func<T?> getCurrentViewModel,
         Action<PropertyChangedEventHandler> addPropertyChangedHandler,
         Action<PropertyChangedEventHandler> removePropertyChangedHandler,
@@ -118,7 +118,7 @@ internal static class ReactiveComponentHelpers
     /// <typeparam name="T">The view model type that implements <see cref="INotifyPropertyChanged"/>.</typeparam>
     /// <param name="viewModel">The current view model.</param>
     /// <param name="state">The reactive component state.</param>
-    public static void HandleInitialized<T>(T? viewModel, ReactiveComponentState state)
+    internal static void HandleInitialized<T>(T? viewModel, ReactiveComponentState state)
         where T : class, INotifyPropertyChanged
     {
         WireActivationIfSupported(viewModel, state);
@@ -136,7 +136,7 @@ internal static class ReactiveComponentHelpers
     /// <param name="addPropertyChangedHandler">Adds a handler to the component's <see cref="INotifyPropertyChanged.PropertyChanged"/> event.</param>
     /// <param name="removePropertyChangedHandler">Removes a handler from the component's <see cref="INotifyPropertyChanged.PropertyChanged"/> event.</param>
     /// <param name="stateHasChangedCallback">A callback that re-renders the component.</param>
-    public static void HandleFirstRender<T>(
+    internal static void HandleFirstRender<T>(
         bool firstRender,
         ReactiveComponentState state,
         Func<T?> getCurrentViewModel,
@@ -173,7 +173,7 @@ internal static class ReactiveComponentHelpers
     /// <param name="disposed">The component's disposed flag, set to <see langword="true"/> on first call.</param>
     /// <param name="disposing"><see langword="true"/> to release managed resources.</param>
     /// <param name="state">The reactive component state.</param>
-    public static void HandleDispose(ref bool disposed, bool disposing, ReactiveComponentState state)
+    internal static void HandleDispose(ref bool disposed, bool disposing, ReactiveComponentState state)
     {
         if (disposed)
         {
@@ -190,7 +190,7 @@ internal static class ReactiveComponentHelpers
     /// </summary>
     /// <param name="disposing"><see langword="true"/> to release managed resources.</param>
     /// <param name="state">The reactive component state.</param>
-    public static void DeactivateAndDisposeState(bool disposing, ReactiveComponentState state)
+    internal static void DeactivateAndDisposeState(bool disposing, ReactiveComponentState state)
     {
         ArgumentNullException.ThrowIfNull(state);
 
@@ -212,7 +212,7 @@ internal static class ReactiveComponentHelpers
     /// <param name="field">The backing field to update.</param>
     /// <param name="value">The new value.</param>
     /// <returns><see langword="true"/> when the field changed; otherwise <see langword="false"/>.</returns>
-    public static bool SetIfChanged<T>(ref T? field, T? value)
+    internal static bool SetIfChanged<T>(ref T? field, T? value)
         where T : class
     {
         if (EqualityComparer<T?>.Default.Equals(field, value))

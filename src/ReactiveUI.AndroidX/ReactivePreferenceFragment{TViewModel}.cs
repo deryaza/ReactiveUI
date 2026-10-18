@@ -5,32 +5,30 @@
 
 using Android.Runtime;
 
+#if REACTIVE_SHIM
+namespace ReactiveUI.Reactive.AndroidX;
+#else
 namespace ReactiveUI.AndroidX;
-
+#endif
 /// <summary>
 /// This is a PreferenceFragment that is both an Activity and has ReactiveObject powers
 /// (i.e. you can call RaiseAndSetIfChanged).
 /// </summary>
 /// <typeparam name="TViewModel">The view model type.</typeparam>
+[System.Diagnostics.DebuggerDisplay("{ViewModel}")]
 public abstract class ReactivePreferenceFragment<TViewModel> : ReactivePreferenceFragment, IViewFor<TViewModel>,
     ICanActivate
     where TViewModel : class
 {
-    /// <summary>
-    /// The backing field for the view model.
-    /// </summary>
+    /// <summary>The backing field for the view model.</summary>
     private TViewModel? _viewModel;
 
-    /// <summary>
-    /// Initializes a new instance of the <see cref="ReactivePreferenceFragment{TViewModel}"/> class.
-    /// </summary>
+    /// <summary>Initializes a new instance of the <see cref="ReactivePreferenceFragment{TViewModel}"/> class.</summary>
     protected ReactivePreferenceFragment()
     {
     }
 
-    /// <summary>
-    /// Initializes a new instance of the <see cref="ReactivePreferenceFragment{TViewModel}"/> class.
-    /// </summary>
+    /// <summary>Initializes a new instance of the <see cref="ReactivePreferenceFragment{TViewModel}"/> class.</summary>
     /// <param name="handle">The handle.</param>
     /// <param name="ownership">The ownership.</param>
     protected ReactivePreferenceFragment(in IntPtr handle, JniHandleOwnership ownership)
@@ -49,6 +47,6 @@ public abstract class ReactivePreferenceFragment<TViewModel> : ReactivePreferenc
     object? IViewFor.ViewModel
     {
         get => _viewModel;
-        set => _viewModel = (TViewModel?)value;
+        set => ViewModel = (TViewModel?)value;
     }
 }

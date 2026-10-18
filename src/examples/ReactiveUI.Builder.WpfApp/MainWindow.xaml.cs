@@ -3,63 +3,51 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
 
+using System.Diagnostics;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media;
+using ReactiveUI.Builder.WpfApp.ViewModels;
 using Splat;
 
 namespace ReactiveUI.Builder.WpfApp;
 
-/// <summary>
-/// Interaction logic for MainWindow.xaml.
-/// </summary>
-public partial class MainWindow : IViewFor<ViewModels.AppBootstrapper>
+/// <summary>The application shell window; hosts the router through a <see cref="RoutedViewHost"/>.</summary>
+[DebuggerDisplay("MainWindow ViewModel={ViewModel}")]
+public partial class MainWindow : IViewFor<AppBootstrapper>
 {
-    /// <summary>
-    /// The view model property.
-    /// </summary>
+    /// <summary>Identifies the <see cref="ViewModel"/> dependency property.</summary>
     public static readonly DependencyProperty ViewModelProperty = DependencyProperty.Register(
         nameof(ViewModel),
-        typeof(ViewModels.AppBootstrapper),
+        typeof(AppBootstrapper),
         typeof(MainWindow),
         new(null));
 
-    /// <summary>
-    /// Initializes a new instance of the <see cref="MainWindow"/> class.
-    /// </summary>
+    /// <summary>Initializes a new instance of the <see cref="MainWindow"/> class.</summary>
     public MainWindow()
     {
         InitializeComponent();
 
-        // Set up content host with routing
+        var screen = (AppBootstrapper)Locator.Current.GetService<IScreen>()!;
+        ViewModel = screen;
         Content = new RoutedViewHost
         {
-            Router = Locator.Current.GetService<IScreen>()!.Router,
-            DefaultContent = new System.Windows.Controls.TextBlock
-            {
-                Text = "Loading...",
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center
-            }
+            Router = screen.Router,
+            DefaultContent = new TextBlock { Text = "Loading…", Foreground = Brushes.Gray, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, },
         };
-        ViewModel = (ViewModels.AppBootstrapper)Locator.Current.GetService<IScreen>()!;
     }
 
-    /// <summary>
-    /// Gets or sets the ViewModel corresponding to this specific View. This should be
-    /// a DependencyProperty if you're using XAML.
-    /// </summary>
-    public ViewModels.AppBootstrapper? ViewModel
+    /// <summary>Gets or sets the root screen that backs this shell.</summary>
+    public AppBootstrapper? ViewModel
     {
-        get => (ViewModels.AppBootstrapper?)GetValue(ViewModelProperty);
+        get => (AppBootstrapper?)GetValue(ViewModelProperty);
         set => SetValue(ViewModelProperty, value);
     }
 
-    /// <summary>
-    /// Gets or sets the ViewModel corresponding to this specific View. This should be
-    /// a DependencyProperty if you're using XAML.
-    /// </summary>
+    /// <inheritdoc/>
     object? IViewFor.ViewModel
     {
         get => ViewModel;
-        set => ViewModel = (ViewModels.AppBootstrapper?)value;
+        set => ViewModel = (AppBootstrapper?)value;
     }
 }

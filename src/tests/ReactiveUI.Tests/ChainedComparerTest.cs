@@ -5,14 +5,10 @@
 
 namespace ReactiveUI.Tests;
 
-/// <summary>
-///     Tests for <see cref="ChainedComparer{T}" />.
-/// </summary>
+/// <summary>Tests for <see cref="ChainedComparer{T}" />.</summary>
 public class ChainedComparerTest
 {
-    /// <summary>
-    ///     Tests that Compare returns 0 when both values are null.
-    /// </summary>
+    /// <summary>Tests that Compare returns 0 when both values are null.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task Compare_BothNull_ReturnsZero()
@@ -24,19 +20,22 @@ public class ChainedComparerTest
         await Assert.That(result).IsEqualTo(0);
     }
 
-    /// <summary>
-    ///     Tests that Compare chains multiple comparers correctly.
-    /// </summary>
+    /// <summary>Tests that Compare chains multiple comparers correctly.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task Compare_ChainedComparers_WorksCorrectly()
     {
-        var parent = Comparer<TestClass>.Create((x, y) => x.Priority.CompareTo(y.Priority));
-        var comparer = new ChainedComparer<TestClass>(parent, (x, y) => x.Value.CompareTo(y.Value));
+        const int LowerValue = 10;
+        const int HigherValue = 20;
+        const int HigherPriority = 2;
+        const int OverriddenValue = 5;
 
-        var obj1 = new TestClass { Priority = 1, Value = 10 };
-        var obj2 = new TestClass { Priority = 1, Value = 20 };
-        var obj3 = new TestClass { Priority = 2, Value = 5 };
+        var parent = Comparer<TestClass>.Create(static (x, y) => x.Priority.CompareTo(y.Priority));
+        var comparer = new ChainedComparer<TestClass>(parent, static (x, y) => x.Value.CompareTo(y.Value));
+
+        var obj1 = new TestClass { Priority = 1, Value = LowerValue };
+        var obj2 = new TestClass { Priority = 1, Value = HigherValue };
+        var obj3 = new TestClass { Priority = HigherPriority, Value = OverriddenValue };
 
         var result1 = comparer.Compare(obj1, obj2);
         var result2 = comparer.Compare(obj1, obj3);
@@ -45,63 +44,57 @@ public class ChainedComparerTest
         await Assert.That(result2).IsLessThan(0);
     }
 
-    /// <summary>
-    ///     Tests that Compare uses comparison when parent is null.
-    /// </summary>
+    /// <summary>Tests that Compare uses comparison when parent is null.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task Compare_NoParent_UsesComparison()
     {
-        var comparer = new ChainedComparer<int>(null, (x, y) => x.CompareTo(y));
+        const int SecondValue = 2;
 
-        var result = comparer.Compare(1, 2);
+        var comparer = new ChainedComparer<int>(null, static (x, y) => x.CompareTo(y));
+
+        var result = comparer.Compare(1, SecondValue);
 
         await Assert.That(result).IsLessThan(0);
     }
 
-    /// <summary>
-    ///     Tests that Compare uses parent result when non-zero.
-    /// </summary>
+    /// <summary>Tests that Compare uses parent result when non-zero.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task Compare_ParentReturnsNonZero_UsesParentResult()
     {
-        var parent = Comparer<int>.Create((x, y) => x.CompareTo(y));
-        var comparer = new ChainedComparer<int>(parent, (_, _) => 0);
+        const int SecondValue = 2;
 
-        var result = comparer.Compare(1, 2);
+        var parent = Comparer<int>.Create(static (x, y) => x.CompareTo(y));
+        var comparer = new ChainedComparer<int>(parent, static (_, _) => 0);
+
+        var result = comparer.Compare(1, SecondValue);
 
         await Assert.That(result).IsLessThan(0);
     }
 
-    /// <summary>
-    ///     Tests that Compare uses comparison when parent returns zero.
-    /// </summary>
+    /// <summary>Tests that Compare uses comparison when parent returns zero.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task Compare_ParentReturnsZero_UsesComparison()
     {
-        var parent = Comparer<TestClass>.Create((_, _) => 0);
-        var comparer = new ChainedComparer<TestClass>(parent, (x, y) => x.Value.CompareTo(y.Value));
+        const int SecondValue = 2;
 
-        var result = comparer.Compare(new() { Value = 1 }, new() { Value = 2 });
+        var parent = Comparer<TestClass>.Create(static (_, _) => 0);
+        var comparer = new ChainedComparer<TestClass>(parent, static (x, y) => x.Value.CompareTo(y.Value));
+
+        var result = comparer.Compare(new() { Value = 1 }, new() { Value = SecondValue });
 
         await Assert.That(result).IsLessThan(0);
     }
 
-    /// <summary>
-    ///     Test class for comparison testing.
-    /// </summary>
+    /// <summary>Test class for comparison testing.</summary>
     private sealed class TestClass
     {
-        /// <summary>
-        ///     Gets or sets the priority used for primary comparison.
-        /// </summary>
+        /// <summary>Gets or sets the priority used for primary comparison.</summary>
         public int Priority { get; set; }
 
-        /// <summary>
-        ///     Gets or sets the value used for secondary comparison.
-        /// </summary>
+        /// <summary>Gets or sets the value used for secondary comparison.</summary>
         public int Value { get; set; }
     }
 }

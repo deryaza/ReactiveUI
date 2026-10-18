@@ -4,12 +4,16 @@
 // See the LICENSE file in the project root for full license information.
 
 #if WINUI_TARGET
+using System.Diagnostics;
 using Microsoft.UI.Xaml.Controls;
 
+#if REACTIVE_SHIM
+namespace ReactiveUI.Reactive;
+#else
 namespace ReactiveUI;
+#endif
 
-/// <summary>
-/// A control with a single transition.
-/// </summary>
+/// <summary>A control with a single transition.</summary>
+[DebuggerDisplay("TransitioningContentControl")]
 public partial class TransitioningContentControl : ContentControl;
 #endif

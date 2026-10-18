@@ -7,24 +7,16 @@ using ReactiveUI.Tests.ObservedChanged.Mocks;
 
 namespace ReactiveUI.Tests.ObservedChanged;
 
-/// <summary>
-///     Tests for the <see cref="NewGameViewModel" />.
-/// </summary>
+/// <summary>Tests for the <see cref="NewGameViewModel" />.</summary>
 public class NewGameViewModelTests
 {
-    /// <summary>
-    ///     The view model under test.
-    /// </summary>
+    /// <summary>The view model under test.</summary>
     private readonly NewGameViewModel _viewmodel;
 
-    /// <summary>
-    ///     Initializes a new instance of the <see cref="NewGameViewModelTests" /> class.
-    /// </summary>
+    /// <summary>Initializes a new instance of the <see cref="NewGameViewModelTests" /> class.</summary>
     public NewGameViewModelTests() => _viewmodel = new();
 
-    /// <summary>
-    ///     Tests that determines whether this instance [can add up to seven players].
-    /// </summary>
+    /// <summary>Tests that determines whether this instance [can add up to seven players].</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task CanAddUpToSevenPlayers()
@@ -32,8 +24,8 @@ public class NewGameViewModelTests
         const int MaxPlayers = 7;
         foreach (var i in Enumerable.Range(1, MaxPlayers))
         {
-            _viewmodel.NewPlayerName = "Player" + i;
-            _viewmodel.AddPlayer.Execute().Subscribe();
+            _viewmodel.NewPlayerName = $"Player{i}";
+            _ = _viewmodel.AddPlayer.Execute().Subscribe();
             await Assert.That(_viewmodel.Players).Count().IsEqualTo(i);
         }
     }

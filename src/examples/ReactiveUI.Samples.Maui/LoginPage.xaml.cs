@@ -3,46 +3,50 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
 
-using System.Reactive.Disposables.Fluent;
-using System.Reactive.Linq;
+using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using ReactiveUI.Maui;
+using ReactiveUI.Primitives;
 
 namespace ReactiveUI.Samples.Maui;
 
-/// <summary>
-/// A reactive login page demonstrating WhenActivated, Bind, BindCommand,
-/// and DisplayAlert for user feedback in MAUI.
-/// </summary>
+/// <summary>A reactive login page demonstrating WhenActivated, Bind, BindCommand, and DisplayAlert for user feedback in MAUI.</summary>
+[DebuggerDisplay("LoginPage ViewModel={ViewModel}")]
 public partial class LoginPage : ReactiveContentPage<LoginViewModel>
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="LoginPage"/> class.
-    /// </summary>
+    /// <summary>Initializes a new instance of the <see cref="LoginPage"/> class.</summary>
+    [SuppressMessage(
+        "Correctness",
+        "SST2403:Do not let 'this' escape from a constructor",
+        Justification = "Single-threaded sample view; WhenActivated captures this for activation-scoped binding after construction.")]
     public LoginPage()
     {
         InitializeComponent();
         ViewModel = new(RxSchedulers.MainThreadScheduler);
 
-        this.WhenActivated(d =>
+        _ = this.WhenActivated(d =>
         {
-            this.Bind(ViewModel, vm => vm.UserName, v => v.Username.Text)
+            _ = this.Bind(ViewModel, static vm => vm.UserName, static v => v.Username.Text)
                 .DisposeWith(d);
 
-            this.Bind(ViewModel, vm => vm.Password, v => v.Password.Text)
+            _ = this.Bind(ViewModel, static vm => vm.Password, static v => v.Password.Text)
                 .DisposeWith(d);
 
-            this.BindCommand(ViewModel, vm => vm.Login, v => v.LoginButton)
+            _ = this.BindCommand(ViewModel, static vm => vm.Login, static v => v.LoginButton)
                 .DisposeWith(d);
 
-            this.BindCommand(ViewModel, vm => vm.Cancel, v => v.CancelButton)
+            _ = this.BindCommand(ViewModel, static vm => vm.Cancel, static v => v.CancelButton)
                 .DisposeWith(d);
 
-            ViewModel.Login
-                .SelectMany(success => Observable.FromAsync(() =>
-                    Shell.Current.DisplayAlertAsync(
+            _ = ViewModel.Login
+                .SelectMany(success => Signal.FromAsync(async () =>
+                {
+                    await Shell.Current.DisplayAlertAsync(
                         success ? "Login Successful" : "Login Failed",
                         success ? "Welcome!" : "Invalid credentials.",
-                        "OK")))
+                        "OK");
+                    return RxVoid.Default;
+                }))
                 .Subscribe()
                 .DisposeWith(d);
         });

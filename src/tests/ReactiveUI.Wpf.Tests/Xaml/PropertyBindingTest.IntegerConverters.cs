@@ -4,44 +4,37 @@
 // See the LICENSE file in the project root for full license information.
 
 using System.Globalization;
-using System.Reactive.Disposables;
-using System.Reactive.Disposables.Fluent;
-using System.Reactive.Linq;
-using System.Reactive.Subjects;
 using ReactiveUI.Tests.Xaml.Mocks;
 
 namespace ReactiveUI.Tests.Xaml;
 
+/// <summary>Tests property bindings.</summary>
 /// <content>
 /// Tests property bindings using integral typed converters with trigger updates.
 /// </content>
 public partial class PropertyBindingTest
 {
-    /// <summary>
-    /// Verifies bind with func to trigger update test view model to view with byte converter.
-    /// </summary>
+    /// <summary>Verifies bind with func to trigger update test view model to view with byte converter.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     public async Task BindWithFuncToTriggerUpdateTestViewModelToViewWithByteConverter()
     {
-        var dis = new CompositeDisposable();
+        var dis = new MultipleDisposable();
         var vm = new PropertyBindViewModel();
         var view = new PropertyBindView { ViewModel = vm };
-        var update = new Subject<bool>();
+        var update = new Signal<bool>();
 
         vm.JustAByte = InitialIntegral;
         await Assert.That(view.SomeTextBox.Text).IsNotEqualTo(vm.JustAByte.ToString(CultureInfo.InvariantCulture));
 
-        var xToStringTypeConverter = new ByteToStringTypeConverter();
+        var toStringConverter = new ByteToStringTypeConverter();
 
-        view.Bind(
+        _ = view.BindTriggered(
             vm,
             static x => x.JustAByte,
             static x => x.SomeTextBox.Text,
             update.AsObservable(),
-            FormatHint,
-            xToStringTypeConverter,
-            xToStringTypeConverter,
+            new(FormatHint, toStringConverter, toStringConverter),
             TriggerUpdate.ViewModelToView).DisposeWith(dis);
 
         vm.JustAByte = 1;
@@ -77,31 +70,27 @@ public partial class PropertyBindingTest
         await Assert.That(dis.IsDisposed).IsTrue();
     }
 
-    /// <summary>
-    /// Verifies bind with func to trigger update test view model to view with nullable byte converter.
-    /// </summary>
+    /// <summary>Verifies bind with func to trigger update test view model to view with nullable byte converter.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     public async Task BindWithFuncToTriggerUpdateTestViewModelToViewWithNullableByteConverter()
     {
-        var dis = new CompositeDisposable();
+        var dis = new MultipleDisposable();
         var vm = new PropertyBindViewModel();
         var view = new PropertyBindView { ViewModel = vm };
-        var update = new Subject<bool>();
+        var update = new Signal<bool>();
 
         vm.JustANullByte = InitialIntegral;
         await Assert.That(view.SomeTextBox.Text).IsNotEqualTo(vm.JustANullByte.Value.ToString(CultureInfo.InvariantCulture));
 
-        var xToStringTypeConverter = new NullableByteToStringTypeConverter();
+        var toStringConverter = new NullableByteToStringTypeConverter();
 
-        view.Bind(
+        _ = view.BindTriggered(
             vm,
             static x => x.JustANullByte,
             static x => x.SomeTextBox.Text,
             update.AsObservable(),
-            FormatHint,
-            xToStringTypeConverter,
-            xToStringTypeConverter,
+            new(FormatHint, toStringConverter, toStringConverter),
             TriggerUpdate.ViewModelToView).DisposeWith(dis);
 
         vm.JustANullByte = 1;
@@ -141,22 +130,20 @@ public partial class PropertyBindingTest
         await Assert.That(dis.IsDisposed).IsTrue();
     }
 
-    /// <summary>
-    /// Verifies bind with func to trigger update test view model to view with byte converter no hint.
-    /// </summary>
+    /// <summary>Verifies bind with func to trigger update test view model to view with byte converter no hint.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     public async Task BindWithFuncToTriggerUpdateTestViewModelToViewWithByteConverterNoHint()
     {
-        var dis = new CompositeDisposable();
+        var dis = new MultipleDisposable();
         var vm = new PropertyBindViewModel();
         var view = new PropertyBindView { ViewModel = vm };
-        var update = new Subject<bool>();
+        var update = new Signal<bool>();
 
         vm.JustAByte = InitialIntegral;
         await Assert.That(view.SomeTextBox.Text).IsNotEqualTo(vm.JustAByte.ToString(CultureInfo.InvariantCulture));
 
-        view.Bind(vm, static x => x.JustAByte, static x => x.SomeTextBox.Text, update.AsObservable(), null, null, null, triggerUpdate: TriggerUpdate.ViewModelToView).DisposeWith(dis);
+        _ = view.BindTriggered(vm, static x => x.JustAByte, static x => x.SomeTextBox.Text, update.AsObservable(), default, triggerUpdate: TriggerUpdate.ViewModelToView).DisposeWith(dis);
 
         vm.JustAByte = 1;
 
@@ -191,31 +178,27 @@ public partial class PropertyBindingTest
         await Assert.That(dis.IsDisposed).IsTrue();
     }
 
-    /// <summary>
-    /// Verifies bind with func to trigger update test view model to view with short converter.
-    /// </summary>
+    /// <summary>Verifies bind with func to trigger update test view model to view with short converter.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     public async Task BindWithFuncToTriggerUpdateTestViewModelToViewWithShortConverter()
     {
-        var dis = new CompositeDisposable();
+        var dis = new MultipleDisposable();
         var vm = new PropertyBindViewModel();
         var view = new PropertyBindView { ViewModel = vm };
-        var update = new Subject<bool>();
+        var update = new Signal<bool>();
 
         vm.JustAInt16 = InitialIntegral;
         await Assert.That(view.SomeTextBox.Text).IsNotEqualTo(vm.JustAInt16.ToString(CultureInfo.InvariantCulture));
 
-        var xToStringTypeConverter = new ShortToStringTypeConverter();
+        var toStringConverter = new ShortToStringTypeConverter();
 
-        view.Bind(
+        _ = view.BindTriggered(
             vm,
             static x => x.JustAInt16,
             static x => x.SomeTextBox.Text,
             update.AsObservable(),
-            FormatHint,
-            xToStringTypeConverter,
-            xToStringTypeConverter,
+            new(FormatHint, toStringConverter, toStringConverter),
             TriggerUpdate.ViewModelToView).DisposeWith(dis);
 
         vm.JustAInt16 = 1;
@@ -251,31 +234,27 @@ public partial class PropertyBindingTest
         await Assert.That(dis.IsDisposed).IsTrue();
     }
 
-    /// <summary>
-    /// Verifies bind with func to trigger update test view model to view with nullable short converter.
-    /// </summary>
+    /// <summary>Verifies bind with func to trigger update test view model to view with nullable short converter.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     public async Task BindWithFuncToTriggerUpdateTestViewModelToViewWithNullableShortConverter()
     {
-        var dis = new CompositeDisposable();
+        var dis = new MultipleDisposable();
         var vm = new PropertyBindViewModel();
         var view = new PropertyBindView { ViewModel = vm };
-        var update = new Subject<bool>();
+        var update = new Signal<bool>();
 
         vm.JustANullInt16 = InitialIntegral;
         await Assert.That(view.SomeTextBox.Text).IsNotEqualTo(vm.JustANullInt16.Value.ToString(CultureInfo.InvariantCulture));
 
-        var xToStringTypeConverter = new NullableShortToStringTypeConverter();
+        var toStringConverter = new NullableShortToStringTypeConverter();
 
-        view.Bind(
+        _ = view.BindTriggered(
             vm,
             static x => x.JustANullInt16,
             static x => x.SomeTextBox.Text,
             update.AsObservable(),
-            FormatHint,
-            xToStringTypeConverter,
-            xToStringTypeConverter,
+            new(FormatHint, toStringConverter, toStringConverter),
             TriggerUpdate.ViewModelToView).DisposeWith(dis);
 
         vm.JustANullInt16 = 1;
@@ -315,22 +294,20 @@ public partial class PropertyBindingTest
         await Assert.That(dis.IsDisposed).IsTrue();
     }
 
-    /// <summary>
-    /// Verifies bind with func to trigger update test view model to view with short converter no hint.
-    /// </summary>
+    /// <summary>Verifies bind with func to trigger update test view model to view with short converter no hint.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     public async Task BindWithFuncToTriggerUpdateTestViewModelToViewWithShortConverterNoHint()
     {
-        var dis = new CompositeDisposable();
+        var dis = new MultipleDisposable();
         var vm = new PropertyBindViewModel();
         var view = new PropertyBindView { ViewModel = vm };
-        var update = new Subject<bool>();
+        var update = new Signal<bool>();
 
         vm.JustAInt16 = InitialIntegral;
         await Assert.That(view.SomeTextBox.Text).IsNotEqualTo(vm.JustAInt16.ToString(CultureInfo.InvariantCulture));
 
-        view.Bind(vm, static x => x.JustAInt16, static x => x.SomeTextBox.Text, update.AsObservable(), null, null, null, triggerUpdate: TriggerUpdate.ViewModelToView).DisposeWith(dis);
+        _ = view.BindTriggered(vm, static x => x.JustAInt16, static x => x.SomeTextBox.Text, update.AsObservable(), default, triggerUpdate: TriggerUpdate.ViewModelToView).DisposeWith(dis);
 
         vm.JustAInt16 = 1;
 
@@ -365,31 +342,27 @@ public partial class PropertyBindingTest
         await Assert.That(dis.IsDisposed).IsTrue();
     }
 
-    /// <summary>
-    /// Verifies bind with func to trigger update test view model to view with integer converter.
-    /// </summary>
+    /// <summary>Verifies bind with func to trigger update test view model to view with integer converter.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     public async Task BindWithFuncToTriggerUpdateTestViewModelToViewWithIntegerConverter()
     {
-        var dis = new CompositeDisposable();
+        var dis = new MultipleDisposable();
         var vm = new PropertyBindViewModel();
         var view = new PropertyBindView { ViewModel = vm };
-        var update = new Subject<bool>();
+        var update = new Signal<bool>();
 
         vm.JustAInt32 = InitialIntegral;
         await Assert.That(view.SomeTextBox.Text).IsNotEqualTo(vm.JustAInt32.ToString(CultureInfo.InvariantCulture));
 
-        var xToStringTypeConverter = new IntegerToStringTypeConverter();
+        var toStringConverter = new IntegerToStringTypeConverter();
 
-        view.Bind(
+        _ = view.BindTriggered(
             vm,
             static x => x.JustAInt32,
             static x => x.SomeTextBox.Text,
             update.AsObservable(),
-            FormatHint,
-            xToStringTypeConverter,
-            xToStringTypeConverter,
+            new(FormatHint, toStringConverter, toStringConverter),
             TriggerUpdate.ViewModelToView).DisposeWith(dis);
 
         vm.JustAInt32 = 1;
@@ -425,31 +398,27 @@ public partial class PropertyBindingTest
         await Assert.That(dis.IsDisposed).IsTrue();
     }
 
-    /// <summary>
-    /// Verifies bind with func to trigger update test view model to view with nullable integer converter.
-    /// </summary>
+    /// <summary>Verifies bind with func to trigger update test view model to view with nullable integer converter.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     public async Task BindWithFuncToTriggerUpdateTestViewModelToViewWithNullableIntegerConverter()
     {
-        var dis = new CompositeDisposable();
+        var dis = new MultipleDisposable();
         var vm = new PropertyBindViewModel();
         var view = new PropertyBindView { ViewModel = vm };
-        var update = new Subject<bool>();
+        var update = new Signal<bool>();
 
         vm.JustANullInt32 = InitialIntegral;
         await Assert.That(view.SomeTextBox.Text).IsNotEqualTo(vm.JustANullInt32!.Value.ToString(CultureInfo.InvariantCulture));
 
-        var xToStringTypeConverter = new NullableIntegerToStringTypeConverter();
+        var toStringConverter = new NullableIntegerToStringTypeConverter();
 
-        view.Bind(
+        _ = view.BindTriggered(
             vm,
             static x => x.JustANullInt32,
             static x => x.SomeTextBox.Text,
             update.AsObservable(),
-            FormatHint,
-            xToStringTypeConverter,
-            xToStringTypeConverter,
+            new(FormatHint, toStringConverter, toStringConverter),
             TriggerUpdate.ViewModelToView).DisposeWith(dis);
 
         vm.JustANullInt32 = 1;
@@ -489,22 +458,20 @@ public partial class PropertyBindingTest
         await Assert.That(dis.IsDisposed).IsTrue();
     }
 
-    /// <summary>
-    /// Verifies bind with func to trigger update test view model to view with integer converter no hint.
-    /// </summary>
+    /// <summary>Verifies bind with func to trigger update test view model to view with integer converter no hint.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     public async Task BindWithFuncToTriggerUpdateTestViewModelToViewWithIntegerConverterNoHint()
     {
-        var dis = new CompositeDisposable();
+        var dis = new MultipleDisposable();
         var vm = new PropertyBindViewModel();
         var view = new PropertyBindView { ViewModel = vm };
-        var update = new Subject<bool>();
+        var update = new Signal<bool>();
 
         vm.JustAInt32 = InitialIntegral;
         await Assert.That(view.SomeTextBox.Text).IsNotEqualTo(vm.JustAInt32.ToString(CultureInfo.InvariantCulture));
 
-        view.Bind(vm, static x => x.JustAInt32, static x => x.SomeTextBox.Text, update.AsObservable(), null, null, null, triggerUpdate: TriggerUpdate.ViewModelToView).DisposeWith(dis);
+        _ = view.BindTriggered(vm, static x => x.JustAInt32, static x => x.SomeTextBox.Text, update.AsObservable(), default, triggerUpdate: TriggerUpdate.ViewModelToView).DisposeWith(dis);
 
         vm.JustAInt32 = 1;
 
@@ -539,31 +506,27 @@ public partial class PropertyBindingTest
         await Assert.That(dis.IsDisposed).IsTrue();
     }
 
-    /// <summary>
-    /// Verifies bind with func to trigger update test view model to view with long converter.
-    /// </summary>
+    /// <summary>Verifies bind with func to trigger update test view model to view with long converter.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     public async Task BindWithFuncToTriggerUpdateTestViewModelToViewWithLongConverter()
     {
-        var dis = new CompositeDisposable();
+        var dis = new MultipleDisposable();
         var vm = new PropertyBindViewModel();
         var view = new PropertyBindView { ViewModel = vm };
-        var update = new Subject<bool>();
+        var update = new Signal<bool>();
 
         vm.JustAInt64 = InitialIntegral;
         await Assert.That(view.SomeTextBox.Text).IsNotEqualTo(vm.JustAInt64.ToString(CultureInfo.InvariantCulture));
 
-        var xToStringTypeConverter = new LongToStringTypeConverter();
+        var toStringConverter = new LongToStringTypeConverter();
 
-        view.Bind(
+        _ = view.BindTriggered(
             vm,
             static x => x.JustAInt64,
             static x => x.SomeTextBox.Text,
             update.AsObservable(),
-            FormatHint,
-            xToStringTypeConverter,
-            xToStringTypeConverter,
+            new(FormatHint, toStringConverter, toStringConverter),
             TriggerUpdate.ViewModelToView).DisposeWith(dis);
 
         vm.JustAInt64 = 1;
@@ -599,22 +562,20 @@ public partial class PropertyBindingTest
         await Assert.That(dis.IsDisposed).IsTrue();
     }
 
-    /// <summary>
-    /// Verifies bind with func to trigger update test view model to view with long converter no hint.
-    /// </summary>
+    /// <summary>Verifies bind with func to trigger update test view model to view with long converter no hint.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     public async Task BindWithFuncToTriggerUpdateTestViewModelToViewWithLongConverterNoHint()
     {
-        var dis = new CompositeDisposable();
+        var dis = new MultipleDisposable();
         var vm = new PropertyBindViewModel();
         var view = new PropertyBindView { ViewModel = vm };
-        var update = new Subject<bool>();
+        var update = new Signal<bool>();
 
         vm.JustAInt64 = InitialIntegral;
         await Assert.That(view.SomeTextBox.Text).IsNotEqualTo(vm.JustAInt64.ToString(CultureInfo.InvariantCulture));
 
-        view.Bind(vm, static x => x.JustAInt64, static x => x.SomeTextBox.Text, update.AsObservable(), null, null, null, triggerUpdate: TriggerUpdate.ViewModelToView).DisposeWith(dis);
+        _ = view.BindTriggered(vm, static x => x.JustAInt64, static x => x.SomeTextBox.Text, update.AsObservable(), default, triggerUpdate: TriggerUpdate.ViewModelToView).DisposeWith(dis);
 
         vm.JustAInt64 = 1;
 

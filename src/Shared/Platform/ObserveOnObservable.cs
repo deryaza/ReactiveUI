@@ -3,8 +3,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
 
-using System.Reactive.Concurrency;
-using ReactiveUI.Helpers;
+using System.Runtime.CompilerServices;
 
 namespace ReactiveUI.Internal;
 
@@ -15,7 +14,7 @@ namespace ReactiveUI.Internal;
 /// <typeparam name="T">The element type.</typeparam>
 /// <param name="source">The source observable.</param>
 /// <param name="scheduler">The scheduler each notification is delivered on.</param>
-internal sealed class ObserveOnObservable<T>(IObservable<T> source, IScheduler scheduler) : IObservable<T>
+internal sealed class ObserveOnObservable<T>(IObservable<T> source, ISequencer scheduler) : IObservable<T>
 {
     /// <inheritdoc/>
     public IDisposable Subscribe(IObserver<T> observer)
@@ -28,9 +27,10 @@ internal sealed class ObserveOnObservable<T>(IObservable<T> source, IScheduler s
     /// <summary>Reschedules each notification onto the scheduler.</summary>
     /// <param name="downstream">The downstream observer.</param>
     /// <param name="scheduler">The scheduler each notification is delivered on.</param>
-    private sealed class Sink(IObserver<T> downstream, IScheduler scheduler) : IObserver<T>
+    private sealed class Sink(IObserver<T> downstream, ISequencer scheduler) : IObserver<T>
     {
         /// <inheritdoc/>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void OnNext(T value) =>
             scheduler.Schedule((Downstream: downstream, Value: value), static (_, state) =>
             {
@@ -39,6 +39,7 @@ internal sealed class ObserveOnObservable<T>(IObservable<T> source, IScheduler s
             });
 
         /// <inheritdoc/>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void OnError(Exception error) =>
             scheduler.Schedule((Downstream: downstream, Error: error), static (_, state) =>
             {
@@ -47,6 +48,7 @@ internal sealed class ObserveOnObservable<T>(IObservable<T> source, IScheduler s
             });
 
         /// <inheritdoc/>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void OnCompleted() =>
             scheduler.Schedule(downstream, static (_, observer) =>
             {

@@ -5,23 +5,15 @@
 
 namespace ReactiveUI.Builder.BlazorServer.Services;
 
-/// <summary>
-/// The type of room event.
-/// </summary>
+/// <summary>The type of room event.</summary>
 public enum RoomEventKind
 {
-    /// <summary>
-    /// A new room was created.
-    /// </summary>
-    Add,
+    /// <summary>A new room was created.</summary>
+    Add = 0,
 
-    /// <summary>
-    /// A room was removed.
-    /// </summary>
-    Remove,
+    /// <summary>A room was removed.</summary>
+    Remove = 1,
 
-    /// <summary>
-    /// Request others to broadcast their current rooms.
-    /// </summary>
-    SyncRequest
+    /// <summary>Request others to broadcast their current rooms.</summary>
+    SyncRequest = 2,
 }

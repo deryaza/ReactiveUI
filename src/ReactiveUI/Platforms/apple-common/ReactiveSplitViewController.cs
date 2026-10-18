@@ -4,8 +4,8 @@
 // See the LICENSE file in the project root for full license information.
 
 using System.ComponentModel;
-using System.Reactive;
-using System.Reactive.Subjects;
+using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using Foundation;
 
 #if UIKIT
@@ -14,24 +14,32 @@ using NSSplitViewController = UIKit.UISplitViewController;
 using AppKit;
 #endif
 
+#if REACTIVE_SHIM
+namespace ReactiveUI.Reactive;
+#else
 namespace ReactiveUI;
-
+#endif
 /// <summary>
 /// This is a View that is both a NSSplitViewController and has ReactiveObject powers
 /// (i.e. you can call RaiseAndSetIfChanged).
 /// </summary>
-public abstract class ReactiveSplitViewController : NSSplitViewController, IReactiveNotifyPropertyChanged<ReactiveSplitViewController>, IHandleObservableErrors, IReactiveObject, ICanActivate
+[DebuggerDisplay("{Activated}, {Deactivated}")]
+public class ReactiveSplitViewController : NSSplitViewController, IReactiveNotifyPropertyChanged<ReactiveSplitViewController>, IHandleObservableErrors, IReactiveObject, ICanActivate
 {
     /// <summary>The subject used to signal view activation.</summary>
-    private readonly Subject<Unit> _activated = new();
+    private readonly Signal<RxVoid> _activated = new();
 
     /// <summary>The subject used to signal view deactivation.</summary>
-    private readonly Subject<Unit> _deactivated = new();
+    private readonly Signal<RxVoid> _deactivated = new();
+
+    /// <summary>The <see cref="INotifyPropertyChanging.PropertyChanging"/> handlers; subscribing enables the classic event.</summary>
+    private PropertyChangingEventHandler? _propertyChanging;
+
+    /// <summary>The <see cref="INotifyPropertyChanged.PropertyChanged"/> handlers; subscribing enables the classic event.</summary>
+    private PropertyChangedEventHandler? _propertyChanged;
 
 #if UIKIT
-    /// <summary>
-    /// Initializes a new instance of the <see cref="ReactiveSplitViewController"/> class.
-    /// </summary>
+    /// <summary>Initializes a new instance of the <see cref="ReactiveSplitViewController"/> class.</summary>
     /// <param name="nibName">The name.</param>
     /// <param name="bundle">The bundle.</param>
     protected ReactiveSplitViewController(string nibName, NSBundle bundle)
@@ -40,45 +48,55 @@ public abstract class ReactiveSplitViewController : NSSplitViewController, IReac
     }
 #endif
 
-    /// <summary>
-    /// Initializes a new instance of the <see cref="ReactiveSplitViewController"/> class.
-    /// </summary>
+    /// <summary>Initializes a new instance of the <see cref="ReactiveSplitViewController"/> class.</summary>
     /// <param name="handle">The pointer.</param>
     protected ReactiveSplitViewController(in IntPtr handle)
         : base(handle)
     {
     }
 
-    /// <summary>
-    /// Initializes a new instance of the <see cref="ReactiveSplitViewController"/> class.
-    /// </summary>
+    /// <summary>Initializes a new instance of the <see cref="ReactiveSplitViewController"/> class.</summary>
     /// <param name="t">The object flag.</param>
     protected ReactiveSplitViewController(NSObjectFlag t)
         : base(t)
     {
     }
 
-    /// <summary>
-    /// Initializes a new instance of the <see cref="ReactiveSplitViewController"/> class.
-    /// </summary>
+    /// <summary>Initializes a new instance of the <see cref="ReactiveSplitViewController"/> class.</summary>
     /// <param name="coder">The coder.</param>
     protected ReactiveSplitViewController(NSCoder coder)
         : base(coder)
     {
     }
 
-    /// <summary>
-    /// Initializes a new instance of the <see cref="ReactiveSplitViewController"/> class.
-    /// </summary>
+    /// <summary>Initializes a new instance of the <see cref="ReactiveSplitViewController"/> class.</summary>
     protected ReactiveSplitViewController()
     {
     }
 
     /// <inheritdoc/>
-    public event PropertyChangingEventHandler? PropertyChanging;
+    public event PropertyChangingEventHandler? PropertyChanging
+    {
+        add
+        {
+            this.SubscribePropertyChangingEvents();
+            _propertyChanging += value;
+        }
+
+        remove => _propertyChanging -= value;
+    }
 
     /// <inheritdoc/>
-    public event PropertyChangedEventHandler? PropertyChanged;
+    public event PropertyChangedEventHandler? PropertyChanged
+    {
+        add
+        {
+            this.SubscribePropertyChangedEvents();
+            _propertyChanged += value;
+        }
+
+        remove => _propertyChanged -= value;
+    }
 
     /// <inheritdoc />
     public IObservable<IReactivePropertyChangedEventArgs<ReactiveSplitViewController>> Changing => this.GetChangingObservable();
@@ -90,16 +108,18 @@ public abstract class ReactiveSplitViewController : NSSplitViewController, IReac
     public IObservable<Exception> ThrownExceptions => this.GetThrownExceptionsObservable();
 
     /// <inheritdoc/>
-    public IObservable<Unit> Activated => _activated;
+    public IObservable<RxVoid> Activated => _activated;
 
     /// <inheritdoc/>
-    public IObservable<Unit> Deactivated => _deactivated;
+    public IObservable<RxVoid> Deactivated => _deactivated;
 
     /// <inheritdoc/>
-    void IReactiveObject.RaisePropertyChanging(PropertyChangingEventArgs args) => PropertyChanging?.Invoke(this, args);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    void IReactiveObject.RaisePropertyChanging(PropertyChangingEventArgs args) => _propertyChanging?.Invoke(this, args);
 
     /// <inheritdoc/>
-    void IReactiveObject.RaisePropertyChanged(PropertyChangedEventArgs args) => PropertyChanged?.Invoke(this, args);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    void IReactiveObject.RaisePropertyChanged(PropertyChangedEventArgs args) => _propertyChanged?.Invoke(this, args);
 
     /// <summary>
     /// When this method is called, an object will not fire change
@@ -108,52 +128,68 @@ public abstract class ReactiveSplitViewController : NSSplitViewController, IReac
     /// </summary>
     /// <returns>An object that, when disposed, reenables change
     /// notifications.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public IDisposable SuppressChangeNotifications() => IReactiveObjectExtensions.SuppressChangeNotifications(this);
 
 #if UIKIT
     /// <inheritdoc/>
     public override void ViewWillAppear(bool animated)
     {
+        // A UIKit callback that arrives after Dispose does nothing.
+        if (_activated.IsDisposed)
+        {
+            return;
+        }
+
         base.ViewWillAppear(animated);
-        _activated.OnNext(Unit.Default);
-        this.ActivateSubviews(true);
+        this.RaiseActivation(_activated, _deactivated, true);
     }
 
     /// <inheritdoc/>
     public override void ViewDidDisappear(bool animated)
     {
+        // A UIKit callback that arrives after Dispose does nothing.
+        if (_activated.IsDisposed)
+        {
+            return;
+        }
+
         base.ViewDidDisappear(animated);
-        _deactivated.OnNext(Unit.Default);
-        this.ActivateSubviews(false);
+        this.RaiseActivation(_activated, _deactivated, false);
     }
 
 #else
     /// <inheritdoc/>
     public override void ViewWillAppear()
     {
+        // An AppKit callback that arrives after Dispose does nothing.
+        if (_activated.IsDisposed)
+        {
+            return;
+        }
+
         base.ViewWillAppear();
-        _activated.OnNext(Unit.Default);
-        this.ActivateSubviews(true);
+        this.RaiseActivation(_activated, _deactivated, true);
     }
 
     /// <inheritdoc/>
     public override void ViewDidDisappear()
     {
+        // An AppKit callback that arrives after Dispose does nothing.
+        if (_activated.IsDisposed)
+        {
+            return;
+        }
+
         base.ViewDidDisappear();
-        _deactivated.OnNext(Unit.Default);
-        this.ActivateSubviews(false);
+        this.RaiseActivation(_activated, _deactivated, false);
     }
 #endif
 
     /// <inheritdoc/>
     protected override void Dispose(bool disposing)
     {
-        if (disposing)
-        {
-            _activated?.Dispose();
-            _deactivated?.Dispose();
-        }
-
+        ActivationSignals.DisposeWhen(disposing, _activated, _deactivated);
         base.Dispose(disposing);
     }
 }

@@ -3,24 +3,21 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
 
+#if REACTIVE_SHIM
+namespace ReactiveUI.Reactive.AndroidX;
+#else
 namespace ReactiveUI.AndroidX;
-
-/// <summary>
-/// This is an Activity that is both an Activity and has ReactiveObject powers
-/// (i.e. you can call RaiseAndSetIfChanged).
-/// </summary>
+#endif
+/// <summary>This is an Activity that is both an Activity and has ReactiveObject powers (i.e. you can call RaiseAndSetIfChanged).</summary>
 /// <typeparam name="TViewModel">The view model type.</typeparam>
+[System.Diagnostics.DebuggerDisplay("{ViewModel}")]
 public class ReactiveFragmentActivity<TViewModel> : ReactiveFragmentActivity, IViewFor<TViewModel>, ICanActivate
     where TViewModel : class
 {
-    /// <summary>
-    /// The backing field for the view model.
-    /// </summary>
+    /// <summary>The backing field for the view model.</summary>
     private TViewModel? _viewModel;
 
-    /// <summary>
-    /// Initializes a new instance of the <see cref="ReactiveFragmentActivity{TViewModel}"/> class.
-    /// </summary>
+    /// <summary>Initializes a new instance of the <see cref="ReactiveFragmentActivity{TViewModel}"/> class.</summary>
     protected ReactiveFragmentActivity()
     {
     }
@@ -36,6 +33,6 @@ public class ReactiveFragmentActivity<TViewModel> : ReactiveFragmentActivity, IV
     object? IViewFor.ViewModel
     {
         get => _viewModel;
-        set => _viewModel = (TViewModel?)value;
+        set => ViewModel = (TViewModel?)value;
     }
 }

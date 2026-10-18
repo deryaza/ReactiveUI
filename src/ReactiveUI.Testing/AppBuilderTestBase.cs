@@ -3,26 +3,29 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
 
+using System.Diagnostics.CodeAnalysis;
+using System.Runtime.CompilerServices;
+
 namespace ReactiveUI.Testing;
 
-/// <summary>
-/// AppBuilderTestBase.
-/// </summary>
+/// <summary>Provides a base class for tests that exercise the application builder lifecycle, offering helpers to run a test body within a serialized AppBuilder test context.</summary>
+[SuppressMessage(
+    "Design",
+    "SST1496:An abstract type declares nothing abstract",
+    Justification = "Abstract only so derived test fixtures inherit the protected static helpers; it declares nothing abstract by design and cannot be static because it is a base class.")]
 public abstract class AppBuilderTestBase
 {
-    /// <summary>
-    /// Runs the application builder test asynchronous.
-    /// </summary>
+    /// <summary>Runs the application builder test asynchronous.</summary>
     /// <param name="testBody">The test body.</param>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     protected static Task RunAppBuilderTestAsync(Func<Task> testBody) =>
         RxTest.AppBuilderTestAsync(testBody);
 
-    /// <summary>
-    /// Runs the application builder test asynchronous.
-    /// </summary>
+    /// <summary>Runs the application builder test asynchronous.</summary>
     /// <param name="testBody">The test body.</param>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     protected static Task RunAppBuilderTestAsync(Action testBody) =>
         RxTest.AppBuilderTestAsync(() =>
         {

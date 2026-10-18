@@ -3,11 +3,14 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
 
-namespace ReactiveUI.Blazor;
+using System.Diagnostics;
 
-/// <summary>
-/// Blazor Framework platform registrations.
-/// </summary>
+#if REACTIVE_SHIM
+namespace ReactiveUI.Reactive.Blazor;
+#else
+namespace ReactiveUI.Blazor;
+#endif
+/// <summary>Blazor Framework platform registrations.</summary>
 /// <seealso cref="IWantsToRegisterStuff" />
 public class Registrations : IWantsToRegisterStuff
 {

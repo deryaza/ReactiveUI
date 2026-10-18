@@ -3,44 +3,38 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
 
-using System.Reactive.Concurrency;
-using System.Reactive.Disposables;
-using System.Reactive.Linq;
-using System.Reactive.Subjects;
+using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Controls;
 using Microsoft.Xaml.Behaviors;
 
-using ReactiveUI.Blend;
 using ReactiveUI.Tests.Utilities.Schedulers;
 using TUnit.Core.Executors;
 
 namespace ReactiveUI.Tests.Wpf;
 
-/// <summary>
-/// Tests for FollowObservableStateBehavior.
-/// </summary>
+/// <summary>Tests for FollowObservableStateBehavior.</summary>
 [NotInParallel]
 [TestExecutor<WpfTestExecutor>]
 public class FollowObservableStateBehaviorTests
 {
+    /// <summary>The delay, in milliseconds, allowed for a visual state transition to settle.</summary>
     private const int StateSettleDelayMs = 50;
+
+    /// <summary>The number of errors observed before the test sequence is considered complete.</summary>
     private const int MaxErrorsBeforeComplete = 3;
+
+    /// <summary>The expected number of subscriptions established by the behavior.</summary>
     private const int ExpectedSubscriptionCount = 4;
 
-    /// <summary>
-    /// Tests that the behavior subscribes to state changes and transitions visual states.
-    /// </summary>
+    /// <summary>Tests that the behavior subscribes to state changes and transitions visual states.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     public async Task StateObservable_WhenChanged_TransitionsVisualState()
     {
         var button = new Button();
-        var behavior = new FollowObservableStateBehavior
-        {
-            SchedulerOverride = ImmediateScheduler.Instance
-        };
-        var stateSubject = new Subject<string>();
+        var behavior = new FollowObservableStateBehavior { SchedulerOverride = Sequencer.Immediate };
+        var stateSubject = new Signal<string>();
 
         // Attach behavior to button
         var behaviors = Interaction.GetBehaviors(button);
@@ -59,26 +53,22 @@ public class FollowObservableStateBehaviorTests
         await Task.CompletedTask;
     }
 
-    /// <summary>
-    /// Tests that OnStateObservableChanged throws ArgumentException for invalid sender.
-    /// </summary>
+    /// <summary>Tests that OnStateObservableChanged throws ArgumentException for invalid sender.</summary>
     [Test]
     public void OnStateObservableChanged_InvalidSender_ThrowsArgumentException()
     {
         var button = new Button();
-        var stateSubject = new Subject<string>();
+        var stateSubject = new Signal<string>();
         var eventArgs = new DependencyPropertyChangedEventArgs(
             FollowObservableStateBehavior.StateObservableProperty,
             null,
             stateSubject.AsObservable());
 
-        Assert.Throws<ArgumentException>(() =>
+        _ = Assert.Throws<ArgumentException>(() =>
             FollowObservableStateBehavior.InternalOnStateObservableChangedForTesting(button, eventArgs));
     }
 
-    /// <summary>
-    /// Tests that OnStateObservableChanged throws ArgumentNullException for default event args.
-    /// </summary>
+    /// <summary>Tests that OnStateObservableChanged throws ArgumentNullException for default event args.</summary>
     [Test]
     public void OnStateObservableChanged_DefaultEventArgs_ThrowsArgumentNullException()
     {
@@ -87,13 +77,11 @@ public class FollowObservableStateBehaviorTests
         var behaviors = Interaction.GetBehaviors(button);
         behaviors.Add(behavior);
 
-        Assert.Throws<ArgumentNullException>(() =>
+        _ = Assert.Throws<ArgumentNullException>(() =>
             FollowObservableStateBehavior.InternalOnStateObservableChangedForTesting(behavior, default));
     }
 
-    /// <summary>
-    /// Tests that OnStateObservableChanged throws ArgumentNullException for null NewValue.
-    /// </summary>
+    /// <summary>Tests that OnStateObservableChanged throws ArgumentNullException for null NewValue.</summary>
     [Test]
     public void OnStateObservableChanged_NullNewValue_ThrowsArgumentNullException()
     {
@@ -107,27 +95,22 @@ public class FollowObservableStateBehaviorTests
             null,
             null!);
 
-        Assert.Throws<ArgumentNullException>(() =>
+        _ = Assert.Throws<ArgumentNullException>(() =>
             FollowObservableStateBehavior.InternalOnStateObservableChangedForTesting(behavior, eventArgs));
     }
 
-    /// <summary>
-    /// Tests that setting a new observable disposes the previous subscription.
-    /// </summary>
+    /// <summary>Tests that setting a new observable disposes the previous subscription.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     public async Task StateObservable_WhenChangedMultipleTimes_DisposesOldSubscription()
     {
         var button = new Button();
-        var behavior = new FollowObservableStateBehavior
-        {
-            SchedulerOverride = ImmediateScheduler.Instance
-        };
+        var behavior = new FollowObservableStateBehavior { SchedulerOverride = Sequencer.Immediate };
         var behaviors = Interaction.GetBehaviors(button);
         behaviors.Add(behavior);
 
-        var subject1 = new Subject<string>();
-        var subject2 = new Subject<string>();
+        var subject1 = new Signal<string>();
+        var subject2 = new Signal<string>();
 
         // Set first observable
         behavior.StateObservable = subject1.AsObservable();
@@ -139,31 +122,25 @@ public class FollowObservableStateBehaviorTests
 
         // First subject should no longer be subscribed
         var completed1 = false;
-        subject1.Subscribe(_ => { }, () => completed1 = true);
+        _ = subject1.Subscribe(static _ => { }, () => completed1 = true);
         subject1.OnCompleted();
 
         await Assert.That(completed1).IsTrue();
     }
 
-    /// <summary>
-    /// Tests that AutoResubscribeOnError resubscribes after an error.
-    /// </summary>
+    /// <summary>Tests that AutoResubscribeOnError resubscribes after an error.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     public async Task AutoResubscribeOnError_WhenTrue_ResubscribesAfterError()
     {
         var button = new Button();
         var scheduler = new VirtualTimeScheduler();
-        var behavior = new FollowObservableStateBehavior
-        {
-            AutoResubscribeOnError = true,
-            SchedulerOverride = scheduler
-        };
+        var behavior = new FollowObservableStateBehavior { AutoResubscribeOnError = true, SchedulerOverride = scheduler };
         var behaviors = Interaction.GetBehaviors(button);
         behaviors.Add(behavior);
 
         var errorCount = 0;
-        behavior.StateObservable = Observable.Create<string>(observer =>
+        behavior.StateObservable = Signal.Create<string>(observer =>
         {
             errorCount++;
             if (errorCount <= MaxErrorsBeforeComplete)
@@ -175,7 +152,7 @@ public class FollowObservableStateBehaviorTests
                 observer.OnCompleted();
             }
 
-            return Disposable.Empty;
+            return Scope.Empty;
         });
 
         scheduler.Start();
@@ -184,29 +161,23 @@ public class FollowObservableStateBehaviorTests
         await Assert.That(errorCount).IsEqualTo(ExpectedSubscriptionCount);
     }
 
-    /// <summary>
-    /// Tests that AutoResubscribeOnError false does not resubscribe after error.
-    /// </summary>
+    /// <summary>Tests that AutoResubscribeOnError false does not resubscribe after error.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     public async Task AutoResubscribeOnError_WhenFalse_DoesNotResubscribe()
     {
         var button = new Button();
         var scheduler = new VirtualTimeScheduler();
-        var behavior = new FollowObservableStateBehavior
-        {
-            AutoResubscribeOnError = false,
-            SchedulerOverride = scheduler
-        };
+        var behavior = new FollowObservableStateBehavior { AutoResubscribeOnError = false, SchedulerOverride = scheduler };
         var behaviors = Interaction.GetBehaviors(button);
         behaviors.Add(behavior);
 
         var errorCount = 0;
-        behavior.StateObservable = Observable.Create<string>(observer =>
+        behavior.StateObservable = Signal.Create<string>(observer =>
         {
             errorCount++;
             observer.OnError(new InvalidOperationException("Test error"));
-            return Disposable.Empty;
+            return Scope.Empty;
         });
 
         scheduler.Start();
@@ -215,50 +186,39 @@ public class FollowObservableStateBehaviorTests
         await Assert.That(errorCount).IsEqualTo(1);
     }
 
-    /// <summary>
-    /// Tests that OnDetaching disposes the watcher.
-    /// </summary>
+    /// <summary>Tests that OnDetaching disposes the watcher.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     public async Task OnDetaching_DisposesWatcher()
     {
         var button = new Button();
-        var behavior = new FollowObservableStateBehavior
-        {
-            SchedulerOverride = ImmediateScheduler.Instance
-        };
+        var behavior = new FollowObservableStateBehavior { SchedulerOverride = Sequencer.Immediate };
         var behaviors = Interaction.GetBehaviors(button);
         behaviors.Add(behavior);
 
-        var disposed = false;
-        behavior.StateObservable = Observable.Create<string>(observer => Disposable.Create(() => disposed = true));
+        var disposed = new StrongBox<bool>();
+        behavior.StateObservable = Signal.Create<string>(observer => Scope.Create(disposed, static box => box.Value = true));
         await Task.Delay(StateSettleDelayMs);
 
         // Detach the behavior
-        behaviors.Remove(behavior);
+        _ = behaviors.Remove(behavior);
         await Task.Delay(StateSettleDelayMs);
 
-        await Assert.That(disposed).IsTrue();
+        await Assert.That(disposed.Value).IsTrue();
     }
 
-    /// <summary>
-    /// Tests that TargetObject can be set and is used instead of AssociatedObject.
-    /// </summary>
+    /// <summary>Tests that TargetObject can be set and is used instead of AssociatedObject.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     public async Task TargetObject_WhenSet_UsedInsteadOfAssociatedObject()
     {
         var button = new Button();
         var targetButton = new Button();
-        var behavior = new FollowObservableStateBehavior
-        {
-            TargetObject = targetButton,
-            SchedulerOverride = ImmediateScheduler.Instance
-        };
+        var behavior = new FollowObservableStateBehavior { TargetObject = targetButton, SchedulerOverride = Sequencer.Immediate };
         var behaviors = Interaction.GetBehaviors(button);
         behaviors.Add(behavior);
 
-        var subject = new Subject<string>();
+        var subject = new Signal<string>();
         behavior.StateObservable = subject.AsObservable();
 
         subject.OnNext("SomeState");
@@ -268,49 +228,35 @@ public class FollowObservableStateBehaviorTests
         await Task.CompletedTask;
     }
 
-    /// <summary>
-    /// Tests that StateObservable getter returns the set value.
-    /// </summary>
+    /// <summary>Tests that StateObservable getter returns the set value.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     public async Task StateObservable_Getter_ReturnsSetValue()
     {
         var button = new Button();
-        var behavior = new FollowObservableStateBehavior
-        {
-            SchedulerOverride = ImmediateScheduler.Instance
-        };
+        var behavior = new FollowObservableStateBehavior { SchedulerOverride = Sequencer.Immediate };
         var behaviors = Interaction.GetBehaviors(button);
         behaviors.Add(behavior);
 
-        var subject = new Subject<string>();
+        var subject = new Signal<string>();
         behavior.StateObservable = subject.AsObservable();
 
         // Read the getter to cover that line
-        var observable = behavior.StateObservable;
-
-        await Assert.That(observable).IsNotNull();
+        await Assert.That(behavior.StateObservable).IsNotNull();
     }
 
-    /// <summary>
-    /// Tests that TargetObject getter returns the set value.
-    /// </summary>
+    /// <summary>Tests that TargetObject getter returns the set value.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     public async Task TargetObject_Getter_ReturnsSetValue()
     {
         var button = new Button();
         var targetButton = new Button();
-        var behavior = new FollowObservableStateBehavior
-        {
-            TargetObject = targetButton
-        };
+        var behavior = new FollowObservableStateBehavior { TargetObject = targetButton };
         var behaviors = Interaction.GetBehaviors(button);
         behaviors.Add(behavior);
 
         // Read the getter to cover that line
-        var target = behavior.TargetObject;
-
-        await Assert.That(target).IsEqualTo(targetButton);
+        await Assert.That(behavior.TargetObject).IsEqualTo(targetButton);
     }
 }

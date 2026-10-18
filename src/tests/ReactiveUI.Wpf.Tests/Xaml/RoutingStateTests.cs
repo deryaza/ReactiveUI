@@ -3,10 +3,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
 
-using System.Reactive.Concurrency;
-using System.Reactive.Disposables;
-using System.Reactive.Linq;
-using System.Reactive.Threading.Tasks;
+using System.Runtime.CompilerServices;
 using ReactiveUI.TestGuiMocks.CommonGuiMocks.Mocks;
 using ReactiveUI.Tests.Utilities.Schedulers;
 using ReactiveUI.Tests.Wpf;
@@ -15,35 +12,54 @@ using TUnit.Core.Executors;
 
 namespace ReactiveUI.Tests.Xaml;
 
-/// <summary>
-/// Tests for <see cref="RoutingState"/>.
-/// </summary>
+/// <summary>Tests for <see cref="RoutingState"/>.</summary>
 [NotInParallel]
 [TestExecutor<WpfTestExecutor>]
 public class RoutingStateTests
 {
+    /// <summary>The expected emission count of two.</summary>
     private const int ExpectedCountTwo = 2;
+
+    /// <summary>The expected emission count of three.</summary>
     private const int ExpectedCountThree = 3;
+
+    /// <summary>The expected emission count of four.</summary>
     private const int ExpectedCountFour = 4;
+
+    /// <summary>The expected emission count of five.</summary>
     private const int ExpectedCountFive = 5;
+
+    /// <summary>The expected emission count of six.</summary>
     private const int ExpectedCountSix = 6;
+
+    /// <summary>The expected emission count of seven.</summary>
     private const int ExpectedCountSeven = 7;
+
+    /// <summary>The expected emission count of eight.</summary>
     private const int ExpectedCountEight = 8;
+
+    /// <summary>The expected emission count of nine.</summary>
     private const int ExpectedCountNine = 9;
+
+    /// <summary>The timeout, in seconds, awaited for a thrown exception.</summary>
     private const int ThrownExceptionTimeoutSeconds = 5;
 
-    /// <summary>
-    /// Navigations the push pop test.
-    /// </summary>
+    /// <summary>The <c>SomeProp</c> label identifying the first view model pushed in stack-search tests.</summary>
+    private const string FirstLabel = "First";
+
+    /// <summary>The <c>SomeProp</c> label identifying the third view model pushed in stack-search tests.</summary>
+    private const string ThirdLabel = "Third";
+
+    /// <summary>Navigations the push pop test.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous unit test.</returns>
     [Test]
     public async Task NavigationPushPopTest()
     {
         var input = new TestViewModel { SomeProp = "Foo" };
-        var fixture = new RoutingState(ImmediateScheduler.Instance);
+        var fixture = new RoutingState(Sequencer.Immediate);
 
         await Assert.That(await fixture.NavigateBack.CanExecute.FirstAsync()).IsFalse();
-        fixture.Navigate.Execute(input).Subscribe();
+        _ = fixture.Navigate.Execute(input).Subscribe();
 
         using (Assert.Multiple())
         {
@@ -60,7 +76,7 @@ public class RoutingStateTests
         }
 
         IRoutableViewModel? navigatedTo = null;
-        fixture.NavigateBack.Execute().Subscribe(vm => navigatedTo = vm);
+        _ = fixture.NavigateBack.Execute().Subscribe(vm => navigatedTo = vm);
         using (Assert.Multiple())
         {
             await Assert.That(navigatedTo).IsSameReferenceAs(input);
@@ -68,20 +84,18 @@ public class RoutingStateTests
         }
     }
 
-    /// <summary>
-    /// Currents the view model observable is accurate.
-    /// </summary>
+    /// <summary>Currents the view model observable is accurate.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous unit test.</returns>
     [Test]
     public async Task CurrentViewModelObservableIsAccurate()
     {
-        var fixture = new RoutingState(ImmediateScheduler.Instance);
+        var fixture = new RoutingState(Sequencer.Immediate);
         var output = new List<IRoutableViewModel?>();
-        fixture.CurrentViewModel.Subscribe(vm => output.Add(vm));
+        _ = fixture.CurrentViewModel.Subscribe(output.Add);
 
         await Assert.That(output).Count().IsEqualTo(1);
 
-        fixture.Navigate.Execute(new TestViewModel { SomeProp = "A" }).Subscribe();
+        _ = fixture.Navigate.Execute(new TestViewModel { SomeProp = "A" }).Subscribe();
         await Assert.That(output).Count().IsEqualTo(ExpectedCountTwo);
 
         await NavigateForwardAndAssert(fixture, output, "B", ExpectedCountThree);
@@ -96,56 +110,57 @@ public class RoutingStateTests
         await NavigateBackAndAssert(fixture, output, ExpectedCountNine, null);
     }
 
-    /// <summary>
-    /// Currents the view model observable is accurate via when any observable.
-    /// </summary>
+    /// <summary>Currents the view model observable is accurate via when any observable.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     public async Task CurrentViewModelObservableIsAccurateViaWhenAnyObservable()
     {
+        // TestScreen seeds a default Router in its constructor, so subscribing observes that router's
+        // CurrentViewModel seed (empty stack -> null) immediately, and swapping Router emits the new router's
+        // seed too. CurrentViewModel emits the current value on subscribe, null for an empty stack, so both
+        // seeds count. This matches the released System.Reactive build's behaviour.
         var fixture = new TestScreen();
         var output = new List<IRoutableViewModel?>();
-        fixture.WhenAnyObservable(static x => x.Router!.CurrentViewModel)
-               .Subscribe(vm => output.Add(vm));
+        _ = fixture.WhenAnyObservable(static x => x.Router!.CurrentViewModel)
+               .Subscribe(output.Add);
 
-        fixture.Router = new(ImmediateScheduler.Instance);
-
+        // One seed from the constructor's default Router.
         await Assert.That(output).Count().IsEqualTo(1);
 
-        fixture.Router.Navigate.Execute(new TestViewModel { SomeProp = "A" }).Subscribe();
+        fixture.Router = new(Sequencer.Immediate);
+
+        // Plus one seed from the swapped-in Router.
         await Assert.That(output).Count().IsEqualTo(ExpectedCountTwo);
 
-        fixture.Router.Navigate.Execute(new TestViewModel { SomeProp = "B" }).Subscribe();
-        using (Assert.Multiple())
-        {
-            await Assert.That(output).Count().IsEqualTo(ExpectedCountThree);
-            await Assert.That((output[^1] as TestViewModel)?.SomeProp).IsEqualTo("B");
-        }
+        _ = fixture.Router.Navigate.Execute(new TestViewModel { SomeProp = "A" }).Subscribe();
+        await Assert.That(output).Count().IsEqualTo(ExpectedCountThree);
 
-        fixture.Router.NavigateBack.Execute().Subscribe();
+        _ = fixture.Router.Navigate.Execute(new TestViewModel { SomeProp = "B" }).Subscribe();
         using (Assert.Multiple())
         {
             await Assert.That(output).Count().IsEqualTo(ExpectedCountFour);
+            await Assert.That((output[^1] as TestViewModel)?.SomeProp).IsEqualTo("B");
+        }
+
+        _ = fixture.Router.NavigateBack.Execute().Subscribe();
+        using (Assert.Multiple())
+        {
+            await Assert.That(output).Count().IsEqualTo(ExpectedCountFive);
             await Assert.That((output[^1] as TestViewModel)?.SomeProp).IsEqualTo("A");
         }
     }
 
-    /// <summary>
-    /// Navigates the and reset check navigation stack.
-    /// </summary>
+    /// <summary>Navigates the and reset check navigation stack.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     public async Task NavigateAndResetCheckNavigationStack()
     {
-        var fixture = new TestScreen
-        {
-            Router = new(ImmediateScheduler.Instance)
-        };
+        var fixture = new TestScreen { Router = new(Sequencer.Immediate) };
         var viewModel = new TestViewModel();
 
         await Assert.That(fixture.Router.NavigationStack).Count().IsLessThanOrEqualTo(0);
 
-        fixture.Router.NavigateAndReset.Execute(viewModel).Subscribe();
+        _ = fixture.Router.NavigateAndReset.Execute(viewModel).Subscribe();
 
         using (Assert.Multiple())
         {
@@ -154,9 +169,7 @@ public class RoutingStateTests
         }
     }
 
-    /// <summary>
-    /// Schedulers the is used for all commands.
-    /// </summary>
+    /// <summary>Schedulers the is used for all commands.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     [TestExecutor<WithSchedulerExecutor>]
@@ -166,25 +179,23 @@ public class RoutingStateTests
         var fixture = new RoutingState(scheduler);
 
         // Navigate should execute synchronously on ImmediateScheduler
-        fixture.Navigate.Execute(new TestViewModel()).Subscribe();
+        _ = fixture.Navigate.Execute(new TestViewModel()).Subscribe();
         await Assert.That(fixture.NavigationStack).Count().IsEqualTo(1);
 
         // Navigate again
-        fixture.Navigate.Execute(new TestViewModel()).Subscribe();
+        _ = fixture.Navigate.Execute(new TestViewModel()).Subscribe();
         await Assert.That(fixture.NavigationStack).Count().IsEqualTo(ExpectedCountTwo);
 
         // NavigateBack should execute synchronously on ImmediateScheduler
-        fixture.NavigateBack.Execute().Subscribe();
+        _ = fixture.NavigateBack.Execute().Subscribe();
         await Assert.That(fixture.NavigationStack).Count().IsEqualTo(1);
 
         // NavigateAndReset should execute synchronously on ImmediateScheduler
-        fixture.NavigateAndReset.Execute(new TestViewModel()).Subscribe();
+        _ = fixture.NavigateAndReset.Execute(new TestViewModel()).Subscribe();
         await Assert.That(fixture.NavigationStack).Count().IsEqualTo(1);
     }
 
-    /// <summary>
-    /// Verifies that navigation exceptions are surfaced through <c>ThrownExceptions</c>.
-    /// </summary>
+    /// <summary>Verifies that navigation exceptions are surfaced through <c>ThrownExceptions</c>.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     [TestExecutor<WithSchedulerExecutor>]
@@ -195,12 +206,11 @@ public class RoutingStateTests
 
         // Set up observable to capture the thrown exception
         var exceptionTask = fixture.Navigate.ThrownExceptions
-            .FirstAsync()
             .Timeout(TimeSpan.FromSeconds(ThrownExceptionTimeoutSeconds))
-            .ToTask();
+            .FirstAsync();
 
         // Execute with null to trigger the exception - subscribe with error handler to catch it
-        fixture.Navigate.Execute(null!).Subscribe(_ => { }, ex => { });
+        _ = fixture.Navigate.Execute(null!).Subscribe(static _ => { }, static ex => { });
 
         // Wait for the exception to be captured through ThrownExceptions
         var thrownException = await exceptionTask;
@@ -209,230 +219,199 @@ public class RoutingStateTests
         await Assert.That(thrownException!.Message).Contains("Navigate must be called on an IRoutableViewModel");
     }
 
-    /// <summary>
-    /// Test FindViewModelInStack finds the correct view model.
-    /// </summary>
+    /// <summary>Test FindViewModelInStack finds the correct view model.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous unit test.</returns>
     [Test]
     public async Task FindViewModelInStackFindsCorrectViewModel()
     {
-        var fixture = new RoutingState(ImmediateScheduler.Instance);
-        var vm1 = new TestViewModel { SomeProp = "First" };
+        var fixture = new RoutingState(Sequencer.Immediate);
+        var vm1 = new TestViewModel { SomeProp = FirstLabel };
         var vm2 = new TestViewModel { SomeProp = "Second" };
-        var vm3 = new TestViewModel { SomeProp = "Third" };
+        var vm3 = new TestViewModel { SomeProp = ThirdLabel };
 
-        fixture.Navigate.Execute(vm1).Subscribe();
-        fixture.Navigate.Execute(vm2).Subscribe();
-        fixture.Navigate.Execute(vm3).Subscribe();
+        _ = fixture.Navigate.Execute(vm1).Subscribe();
+        _ = fixture.Navigate.Execute(vm2).Subscribe();
+        _ = fixture.Navigate.Execute(vm3).Subscribe();
 
         var found = fixture.FindViewModelInStack<TestViewModel>();
 
         await Assert.That(found).IsEqualTo(vm3); // Should find the last one (topmost)
     }
 
-    /// <summary>
-    /// Test FindViewModelInStack returns null when not found.
-    /// </summary>
+    /// <summary>Test FindViewModelInStack returns null when not found.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous unit test.</returns>
     [Test]
     public async Task FindViewModelInStackReturnsNullWhenNotFound()
     {
-        var fixture = new RoutingState(ImmediateScheduler.Instance);
+        var fixture = new RoutingState(Sequencer.Immediate);
         var found = fixture.FindViewModelInStack<TestViewModel>();
 
         await Assert.That(found).IsNull();
     }
 
-    /// <summary>
-    /// Test FindViewModelInStack searches from top of stack.
-    /// </summary>
+    /// <summary>Test FindViewModelInStack searches from top of stack.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous unit test.</returns>
     [Test]
     public async Task FindViewModelInStackSearchesFromTop()
     {
-        var fixture = new RoutingState(ImmediateScheduler.Instance);
-        var vm1 = new TestViewModel { SomeProp = "First" };
+        var fixture = new RoutingState(Sequencer.Immediate);
+        var vm1 = new TestViewModel { SomeProp = FirstLabel };
         var vm2 = new AlternateViewModel();
-        var vm3 = new TestViewModel { SomeProp = "Third" };
+        var vm3 = new TestViewModel { SomeProp = ThirdLabel };
 
-        fixture.Navigate.Execute(vm1).Subscribe();
-        fixture.Navigate.Execute(vm2).Subscribe();
-        fixture.Navigate.Execute(vm3).Subscribe();
+        _ = fixture.Navigate.Execute(vm1).Subscribe();
+        _ = fixture.Navigate.Execute(vm2).Subscribe();
+        _ = fixture.Navigate.Execute(vm3).Subscribe();
 
         var found = fixture.FindViewModelInStack<TestViewModel>();
 
-        await Assert.That(found?.SomeProp).IsEqualTo("Third");
+        await Assert.That(found?.SomeProp).IsEqualTo(ThirdLabel);
     }
 
-    /// <summary>
-    /// Test FindViewModelInStack throws on null.
-    /// </summary>
+    /// <summary>Test FindViewModelInStack throws on null.</summary>
     [Test]
     public void FindViewModelInStackThrowsOnNull()
     {
         RoutingState? fixture = null;
-        Assert.Throws<ArgumentNullException>(() => fixture!.FindViewModelInStack<TestViewModel>());
+        _ = Assert.Throws<ArgumentNullException>(() => fixture!.FindViewModelInStack<TestViewModel>());
     }
 
-    /// <summary>
-    /// Test GetCurrentViewModel returns the top view model.
-    /// </summary>
+    /// <summary>Test GetCurrentViewModel returns the top view model.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous unit test.</returns>
     [Test]
     public async Task GetCurrentViewModelReturnsTopViewModel()
     {
-        var fixture = new RoutingState(ImmediateScheduler.Instance);
-        var vm1 = new TestViewModel { SomeProp = "First" };
+        var fixture = new RoutingState(Sequencer.Immediate);
+        var vm1 = new TestViewModel { SomeProp = FirstLabel };
         var vm2 = new TestViewModel { SomeProp = "Second" };
 
-        fixture.Navigate.Execute(vm1).Subscribe();
-        fixture.Navigate.Execute(vm2).Subscribe();
+        _ = fixture.Navigate.Execute(vm1).Subscribe();
+        _ = fixture.Navigate.Execute(vm2).Subscribe();
 
         var current = fixture.GetCurrentViewModel();
 
         await Assert.That(current).IsEqualTo(vm2);
     }
 
-    /// <summary>
-    /// Test GetCurrentViewModel returns null for empty stack.
-    /// </summary>
+    /// <summary>Test GetCurrentViewModel returns null for empty stack.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous unit test.</returns>
     [Test]
     public async Task GetCurrentViewModelReturnsNullForEmptyStack()
     {
-        var fixture = new RoutingState(ImmediateScheduler.Instance);
+        var fixture = new RoutingState(Sequencer.Immediate);
         var current = fixture.GetCurrentViewModel();
 
         await Assert.That(current).IsNull();
     }
 
-    /// <summary>
-    /// Test GetCurrentViewModel throws on null.
-    /// </summary>
+    /// <summary>Test GetCurrentViewModel throws on null.</summary>
     [Test]
     public void GetCurrentViewModelThrowsOnNull()
     {
         RoutingState? fixture = null;
-        Assert.Throws<ArgumentNullException>(() => fixture!.GetCurrentViewModel());
+        _ = Assert.Throws<ArgumentNullException>(() => fixture!.GetCurrentViewModel());
     }
 
-    /// <summary>
-    /// Test WhenNavigatedToObservable fires when navigated to.
-    /// </summary>
+    /// <summary>Test WhenNavigatedToObservable fires when navigated to.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous unit test.</returns>
     [Test]
     public async Task WhenNavigatedToObservableFires()
     {
-        var screen = new TestScreen { Router = new(ImmediateScheduler.Instance) };
+        var screen = new TestScreen { Router = new(Sequencer.Immediate) };
         var vm = new TestViewModel { HostScreen = screen };
 
         var fired = false;
-        vm.WhenNavigatedToObservable().Subscribe(_ => fired = true);
+        _ = vm.WhenNavigatedToObservable().Subscribe(_ => fired = true);
 
-        screen.Router.Navigate.Execute(vm).Subscribe();
+        _ = screen.Router.Navigate.Execute(vm).Subscribe();
 
         await Assert.That(fired).IsTrue();
     }
 
-    /// <summary>
-    /// Test WhenNavigatedToObservable completes when removed.
-    /// </summary>
+    /// <summary>Test WhenNavigatedToObservable completes when removed.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous unit test.</returns>
     [Test]
     public async Task WhenNavigatedToObservableCompletesWhenRemoved()
     {
-        var screen = new TestScreen { Router = new(ImmediateScheduler.Instance) };
+        var screen = new TestScreen { Router = new(Sequencer.Immediate) };
         var vm = new TestViewModel { HostScreen = screen };
 
         var completed = false;
-        vm.WhenNavigatedToObservable().Subscribe(_ => { }, () => completed = true);
+        _ = vm.WhenNavigatedToObservable().Subscribe(static _ => { }, () => completed = true);
 
-        screen.Router.Navigate.Execute(vm).Subscribe();
-        screen.Router.NavigateAndReset.Execute(new TestViewModel { HostScreen = screen }).Subscribe();
+        _ = screen.Router.Navigate.Execute(vm).Subscribe();
+        _ = screen.Router.NavigateAndReset.Execute(new TestViewModel { HostScreen = screen }).Subscribe();
 
         await Assert.That(completed).IsTrue();
     }
 
-    /// <summary>
-    /// Test WhenNavigatingFromObservable fires when navigating away.
-    /// </summary>
+    /// <summary>Test WhenNavigatingFromObservable fires when navigating away.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous unit test.</returns>
     [Test]
     public async Task WhenNavigatingFromObservableFires()
     {
-        var screen = new TestScreen { Router = new(ImmediateScheduler.Instance) };
+        var screen = new TestScreen { Router = new(Sequencer.Immediate) };
         var vm1 = new TestViewModel { HostScreen = screen };
         var vm2 = new TestViewModel { HostScreen = screen };
 
         var fired = false;
-        vm1.WhenNavigatingFromObservable().Subscribe(_ => fired = true);
+        _ = vm1.WhenNavigatingFromObservable().Subscribe(_ => fired = true);
 
-        screen.Router.Navigate.Execute(vm1).Subscribe();
-        screen.Router.Navigate.Execute(vm2).Subscribe();
+        _ = screen.Router.Navigate.Execute(vm1).Subscribe();
+        _ = screen.Router.Navigate.Execute(vm2).Subscribe();
 
         await Assert.That(fired).IsTrue();
     }
 
-    /// <summary>
-    /// Test WhenNavigatedTo sets up and tears down correctly.
-    /// </summary>
+    /// <summary>Test WhenNavigatedTo sets up and tears down correctly.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous unit test.</returns>
     [Test]
     public async Task WhenNavigatedToSetsUpAndTearsDown()
     {
-        var screen = new TestScreen { Router = new(ImmediateScheduler.Instance) };
+        var screen = new TestScreen { Router = new(Sequencer.Immediate) };
         var vm = new TestViewModel { HostScreen = screen };
 
         var setupCount = 0;
-        var teardownCount = 0;
+        var teardownCount = new StrongBox<int>();
 
-        vm.WhenNavigatedTo(() =>
+        _ = vm.WhenNavigatedTo(() =>
         {
             setupCount++;
-            return Disposable.Create(() => teardownCount++);
+            return Scope.Create(teardownCount, static c => c.Value++);
         });
 
-        screen.Router.Navigate.Execute(vm).Subscribe();
+        _ = screen.Router.Navigate.Execute(vm).Subscribe();
         await Assert.That(setupCount).IsEqualTo(1);
 
-        screen.Router.Navigate.Execute(new TestViewModel { HostScreen = screen }).Subscribe();
-        await Assert.That(teardownCount).IsEqualTo(1);
+        _ = screen.Router.Navigate.Execute(new TestViewModel { HostScreen = screen }).Subscribe();
+        await Assert.That(teardownCount.Value).IsEqualTo(1);
     }
 
-    /// <summary>
-    /// Test WhenNavigatedTo throws on null.
-    /// </summary>
+    /// <summary>Test WhenNavigatedTo throws on null.</summary>
     [Test]
     public void WhenNavigatedToThrowsOnNull()
     {
         TestViewModel? vm = null;
-        Assert.Throws<ArgumentNullException>(() => vm!.WhenNavigatedTo(() => Disposable.Empty));
+        _ = Assert.Throws<ArgumentNullException>(() => vm!.WhenNavigatedTo(static () => Scope.Empty));
     }
 
-    /// <summary>
-    /// Test WhenNavigatedToObservable throws on null.
-    /// </summary>
+    /// <summary>Test WhenNavigatedToObservable throws on null.</summary>
     [Test]
     public void WhenNavigatedToObservableThrowsOnNull()
     {
         TestViewModel? vm = null;
-        Assert.Throws<ArgumentNullException>(() => vm!.WhenNavigatedToObservable());
+        _ = Assert.Throws<ArgumentNullException>(() => vm!.WhenNavigatedToObservable());
     }
 
-    /// <summary>
-    /// Test WhenNavigatingFromObservable throws on null.
-    /// </summary>
+    /// <summary>Test WhenNavigatingFromObservable throws on null.</summary>
     [Test]
     public void WhenNavigatingFromObservableThrowsOnNull()
     {
         TestViewModel? vm = null;
-        Assert.Throws<ArgumentNullException>(() => vm!.WhenNavigatingFromObservable());
+        _ = Assert.Throws<ArgumentNullException>(() => vm!.WhenNavigatingFromObservable());
     }
 
-    /// <summary>
-    /// Navigates forward to a new <see cref="TestViewModel"/> and asserts the observed
-    /// output count and the top-of-stack property value.
-    /// </summary>
+    /// <summary>Navigates forward to a new <see cref="TestViewModel"/> and asserts the observed output count and the top-of-stack property value.</summary>
     /// <param name="fixture">The routing state under test.</param>
     /// <param name="output">The captured sequence of current view models.</param>
     /// <param name="someProp">The property value to navigate to and expect on top.</param>
@@ -440,7 +419,7 @@ public class RoutingStateTests
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     private static async Task NavigateForwardAndAssert(RoutingState fixture, List<IRoutableViewModel?> output, string someProp, int expectedCount)
     {
-        fixture.Navigate.Execute(new TestViewModel { SomeProp = someProp }).Subscribe();
+        _ = fixture.Navigate.Execute(new TestViewModel { SomeProp = someProp }).Subscribe();
         using (Assert.Multiple())
         {
             await Assert.That(output).Count().IsEqualTo(expectedCount);
@@ -477,10 +456,8 @@ public class RoutingStateTests
         await Assert.That(navigatedTo as TestViewModel).IsNull();
     }
 
-    /// <summary>
-    /// Alternate view model for testing.
-    /// </summary>
-    private sealed class AlternateViewModel : ReactiveUI.ReactiveObject, IRoutableViewModel
+    /// <summary>Alternate view model for testing.</summary>
+    private sealed class AlternateViewModel : ReactiveObject, IRoutableViewModel
     {
         /// <inheritdoc/>
         public string? UrlPathSegment { get; set; }

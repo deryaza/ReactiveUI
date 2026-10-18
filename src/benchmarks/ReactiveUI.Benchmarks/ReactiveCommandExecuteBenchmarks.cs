@@ -3,31 +3,28 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
 
-using System.Reactive;
-using System.Reactive.Concurrency;
+using System.Diagnostics;
 using BenchmarkDotNet.Attributes;
 
 namespace ReactiveUI.Benchmarks;
 
-/// <summary>
-/// Benchmarks <see cref="ReactiveCommand"/> execution on the immediate scheduler, for both the synchronous and
-/// task-based pipelines.
-/// </summary>
+/// <summary>Benchmarks <see cref="ReactiveCommand"/> execution on the immediate scheduler, for both the synchronous and task-based pipelines.</summary>
 [MemoryDiagnoser]
 [MarkdownExporterAttribute.GitHub]
+[DebuggerDisplay("ReactiveCommandExecuteBenchmarks")]
 public class ReactiveCommandExecuteBenchmarks
 {
     /// <summary>The number of executions per benchmark.</summary>
     private const int ExecuteCount = 10_000;
 
     /// <summary>Sink for synchronous command results.</summary>
-    private readonly NoopObserver<Unit> _syncSink = new();
+    private readonly NoopObserver<RxVoid> _syncSink = new();
 
     /// <summary>Sink for task-based command results.</summary>
     private readonly NoopObserver<int> _taskSink = new();
 
     /// <summary>The synchronous command under test.</summary>
-    private ReactiveCommand<Unit, Unit> _syncCommand = null!;
+    private ReactiveCommand<RxVoid, RxVoid> _syncCommand = null!;
 
     /// <summary>The task-based command under test.</summary>
     private ReactiveCommand<int, int> _taskCommand = null!;
@@ -36,8 +33,8 @@ public class ReactiveCommandExecuteBenchmarks
     [GlobalSetup]
     public void Setup()
     {
-        _syncCommand = ReactiveCommand.Create<Unit, Unit>(static parameter => parameter, outputScheduler: ImmediateScheduler.Instance);
-        _taskCommand = ReactiveCommand.CreateFromTask<int, int>(static parameter => Task.FromResult(parameter), outputScheduler: ImmediateScheduler.Instance);
+        _syncCommand = ReactiveCommand.Create<RxVoid, RxVoid>(static parameter => parameter, outputScheduler: Sequencer.Immediate);
+        _taskCommand = ReactiveCommand.CreateFromTask<int, int>(Task.FromResult, outputScheduler: Sequencer.Immediate);
     }
 
     /// <summary>Disposes both commands.</summary>

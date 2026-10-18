@@ -3,11 +3,21 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
 
+using System.Diagnostics;
+
 #if IS_WINUI
+#if REACTIVE_SHIM
+namespace ReactiveUI.Reactive.WinUI;
+#else
 namespace ReactiveUI.WinUI;
 #endif
+#endif
 #if IS_MAUI
+#if REACTIVE_SHIM
+namespace ReactiveUI.Reactive.Maui;
+#else
 namespace ReactiveUI.Maui;
+#endif
 #endif
 
 /// <summary>
@@ -32,9 +42,7 @@ public class Registrations : IWantsToRegisterStuff
 
 #if WINUI_TARGET
         registrar.RegisterConstant<IPlatformOperations>(static () => new PlatformOperations());
-        registrar.RegisterConstant<ICreatesObservableForProperty>(static () => new DependencyObjectObservableForProperty());
         registrar.RegisterConstant<IPropertyBindingHook>(static () => new AutoDataTemplateBindingHook());
-        registrar.RegisterConstant<IBindingFallbackConverter>(static () => new ComponentModelFallbackConverter());
 
         RxSchedulers.SuppressViewCommandBindingMessage = true;
 #endif

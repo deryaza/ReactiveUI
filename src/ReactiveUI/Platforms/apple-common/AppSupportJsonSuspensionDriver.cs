@@ -3,21 +3,20 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
 
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
-using System.Reactive;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
 using Foundation;
-using ReactiveUI.Helpers;
-using ReactiveUI.Internal;
 
+#if REACTIVE_SHIM
+namespace ReactiveUI.Reactive;
+#else
 namespace ReactiveUI;
-
-/// <summary>
-/// Loads and saves state to persistent storage under the platform Application Support directory.
-/// </summary>
+#endif
+/// <summary>Loads and saves state to persistent storage under the platform Application Support directory.</summary>
 /// <remarks>
 /// <para>
 /// This driver supports two serialization modes:
@@ -39,35 +38,25 @@ namespace ReactiveUI;
 /// The persisted file name is <c>state.dat</c>.
 /// </para>
 /// </remarks>
+[DebuggerDisplay("AppSupportJsonSuspensionDriver")]
 public sealed class AppSupportJsonSuspensionDriver : ISuspensionDriver
 {
-    /// <summary>
-    /// The default subdirectory used beneath Application Support.
-    /// </summary>
+    /// <summary>The default subdirectory used beneath Application Support.</summary>
     private const string DefaultSubDirectory = "Data";
 
-    /// <summary>
-    /// The persisted state file name.
-    /// </summary>
+    /// <summary>The persisted state file name.</summary>
     private const string StateFileName = "state.dat";
 
-    /// <summary>
-    /// Lazily computed directory path used to reduce repeated Foundation calls and filesystem checks.
-    /// </summary>
+    /// <summary>Lazily computed directory path used to reduce repeated Foundation calls and filesystem checks.</summary>
     private readonly Lazy<string> _appDirectory;
 
-    /// <summary>
-    /// Initializes a new instance of the <see cref="AppSupportJsonSuspensionDriver"/> class
-    /// using the default <c>Data</c> subdirectory beneath Application Support.
-    /// </summary>
+    /// <summary>Initializes a new instance of the <see cref="AppSupportJsonSuspensionDriver"/> class using the default <c>Data</c> subdirectory beneath Application Support.</summary>
     public AppSupportJsonSuspensionDriver()
         : this(DefaultSubDirectory)
     {
     }
 
-    /// <summary>
-    /// Initializes a new instance of the <see cref="AppSupportJsonSuspensionDriver"/> class.
-    /// </summary>
+    /// <summary>Initializes a new instance of the <see cref="AppSupportJsonSuspensionDriver"/> class.</summary>
     /// <param name="subDirectory">
     /// The application-specific subdirectory beneath Application Support to store state.
     /// </param>
@@ -76,7 +65,7 @@ public sealed class AppSupportJsonSuspensionDriver : ISuspensionDriver
     {
         ArgumentExceptionHelper.ThrowIfNull(subDirectory);
 
-        _appDirectory = new Lazy<string>(
+        _appDirectory = new(
             () => CreateAppDirectory(NSSearchPathDirectory.ApplicationSupportDirectory, subDirectory),
             isThreadSafe: true);
     }
@@ -92,11 +81,11 @@ public sealed class AppSupportJsonSuspensionDriver : ISuspensionDriver
             using var stream = File.OpenRead(path);
 
             var result = JsonSerializer.Deserialize(stream, typeInfo);
-            return new ReturnObservable<T?>(result);
+            return Signal.Emit(result);
         }
         catch (Exception ex)
         {
-            return new ThrowObservable<T?>(ex);
+            return Signal.Fail<T?>(ex);
         }
     }
 
@@ -112,16 +101,16 @@ public sealed class AppSupportJsonSuspensionDriver : ISuspensionDriver
 
             // Reflection-based: object deserialization typically requires metadata at runtime.
             var result = JsonSerializer.Deserialize<object>(stream);
-            return new ReturnObservable<object?>(result);
+            return Signal.Emit(result);
         }
         catch (Exception ex)
         {
-            return new ThrowObservable<object?>(ex);
+            return Signal.Fail<object?>(ex);
         }
     }
 
     /// <inheritdoc />
-    public IObservable<Unit> SaveState<T>(T state, JsonTypeInfo<T> typeInfo)
+    public IObservable<RxVoid> SaveState<T>(T state, JsonTypeInfo<T> typeInfo)
     {
         ArgumentExceptionHelper.ThrowIfNull(typeInfo);
 
@@ -131,18 +120,18 @@ public sealed class AppSupportJsonSuspensionDriver : ISuspensionDriver
             using var stream = File.Open(path, FileMode.Create, FileAccess.Write, FileShare.None);
 
             JsonSerializer.Serialize(stream, state, typeInfo);
-            return SingleValueObservable.Unit;
+            return ImmutableReturnRxVoidSignal.Instance;
         }
         catch (Exception ex)
         {
-            return new ThrowObservable<Unit>(ex);
+            return Signal.Fail<RxVoid>(ex);
         }
     }
 
     /// <inheritdoc />
     [RequiresUnreferencedCode("Uses reflection-based System.Text.Json serialization for generic T. Prefer SaveState<T>(T, JsonTypeInfo<T>) for trimming/AOT.")]
     [RequiresDynamicCode("Uses reflection-based System.Text.Json serialization for generic T. Prefer SaveState<T>(T, JsonTypeInfo<T>) for trimming/AOT.")]
-    public IObservable<Unit> SaveState<T>(T state)
+    public IObservable<RxVoid> SaveState<T>(T state)
     {
         try
         {
@@ -150,33 +139,31 @@ public sealed class AppSupportJsonSuspensionDriver : ISuspensionDriver
             using var stream = File.Open(path, FileMode.Create, FileAccess.Write, FileShare.None);
 
             JsonSerializer.Serialize(stream, state);
-            return SingleValueObservable.Unit;
+            return ImmutableReturnRxVoidSignal.Instance;
         }
         catch (Exception ex)
         {
-            return new ThrowObservable<Unit>(ex);
+            return Signal.Fail<RxVoid>(ex);
         }
     }
 
     /// <inheritdoc />
-    public IObservable<Unit> InvalidateState()
+    public IObservable<RxVoid> InvalidateState()
     {
         try
         {
             var path = GetStatePath();
             File.Delete(path);
 
-            return SingleValueObservable.Unit;
+            return ImmutableReturnRxVoidSignal.Instance;
         }
         catch (Exception ex)
         {
-            return new ThrowObservable<Unit>(ex);
+            return Signal.Fail<RxVoid>(ex);
         }
     }
 
-    /// <summary>
-    /// Creates (if necessary) and returns the application storage directory beneath the specified special folder.
-    /// </summary>
+    /// <summary>Creates (if necessary) and returns the application storage directory beneath the specified special folder.</summary>
     /// <param name="targetDir">The platform search path directory.</param>
     /// <param name="subDir">The application-specific subdirectory name.</param>
     /// <returns>The fully qualified directory path.</returns>
@@ -188,11 +175,7 @@ public sealed class AppSupportJsonSuspensionDriver : ISuspensionDriver
         // Allocate NSFileManager only once per driver instance via Lazy. Kept local and simple.
         var fm = new NSFileManager();
 
-        var url = fm.GetUrl(targetDir, NSSearchPathDomain.All, null, true, out _);
-        if (url is null)
-        {
-            throw new InvalidOperationException("Unable to resolve platform application support directory.");
-        }
+        var url = fm.GetUrl(targetDir, NSSearchPathDomain.All, null, true, out _) ?? throw new InvalidOperationException("Unable to resolve platform application support directory.");
 
         var bundleId = NSBundle.MainBundle?.BundleIdentifier;
         if (string.IsNullOrEmpty(bundleId))
@@ -210,17 +193,15 @@ public sealed class AppSupportJsonSuspensionDriver : ISuspensionDriver
 
         if (!Directory.Exists(path))
         {
-            Directory.CreateDirectory(path);
+            _ = Directory.CreateDirectory(path);
         }
 
         return path;
     }
 
-    /// <summary>
-    /// Computes the full path to the persisted state file.
-    /// </summary>
+    /// <summary>Computes the full path to the persisted state file.</summary>
     /// <returns>The absolute file path.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private string GetStatePath()
-        => Path.Combine(_appDirectory.Value, StateFileName);
+    private string GetStatePath() =>
+        Path.Combine(_appDirectory.Value, StateFileName);
 }

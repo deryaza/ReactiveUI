@@ -5,44 +5,38 @@
 
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
-using System.Reactive;
-using System.Reactive.Linq;
 using ReactiveUI.Builder.BlazorServer.Models;
 
 namespace ReactiveUI.Builder.BlazorServer.ViewModels;
 
-/// <summary>
-/// View model for a single chat room.
-/// </summary>
+/// <summary>View model for a single chat room.</summary>
+[DebuggerDisplay("ChatRoomViewModel Room={RoomName}")]
 public class ChatRoomViewModel : ReactiveObject, IRoutableViewModel
 {
-    /// <summary>
-    /// Backing helper indicating whether a message can be sent.
-    /// </summary>
+    /// <summary>The quiet window, in milliseconds, applied before notifying the UI of newly received messages.</summary>
+    private const int IncomingMessageQuietWindowMilliseconds = 33;
+
+    /// <summary>Backing helper indicating whether a message can be sent.</summary>
     private readonly ObservableAsPropertyHelper<bool> _canSendPropertyHelper;
 
-    /// <summary>
-    /// The chat room backing this view model.
-    /// </summary>
+    /// <summary>The chat room backing this view model.</summary>
     private readonly ChatRoom _room;
 
-    /// <summary>
-    /// The current user's display name.
-    /// </summary>
+    /// <summary>The current user's display name.</summary>
     private readonly string _user;
 
-    /// <summary>
-    /// The identifier of the sending instance, used to filter out echoed messages.
-    /// </summary>
+    /// <summary>The identifier of the sending instance, used to filter out echoed messages.</summary>
     private readonly Guid _senderInstanceId;
 
-    /// <summary>
-    /// Initializes a new instance of the <see cref="ChatRoomViewModel" /> class.
-    /// </summary>
+    /// <summary>Initializes a new instance of the <see cref="ChatRoomViewModel" /> class.</summary>
     /// <param name="hostScreen">The host screen.</param>
     /// <param name="room">The room.</param>
     /// <param name="user">The user.</param>
-    [SuppressMessage("Reliability", "S3366:Don't expose 'this' in constructors", Justification = "OAPH/WhenAny initialization requires 'this'; single-threaded sample.")]
+    /// <exception cref="InvalidOperationException"><paramref name="hostScreen"/> is not an <see cref="AppBootstrapper"/>, so there is no circuit id to tag outgoing messages with.</exception>
+    [SuppressMessage(
+        "Design",
+        "SST2403:'this' escapes before construction finishes",
+        Justification = "Canonical ObservableAsPropertyHelper and MessageBus setup needs 'this' in the constructor; the single-threaded Blazor circuit never exposes the half-built instance.")]
     public ChatRoomViewModel(IScreen hostScreen, ChatRoom room, string user)
     {
         ArgumentNullException.ThrowIfNull(room);
@@ -54,27 +48,28 @@ public class ChatRoomViewModel : ReactiveObject, IRoutableViewModel
         _senderInstanceId = (hostScreen as AppBootstrapper)?.CircuitId
                             ?? throw new InvalidOperationException("Expected HostScreen to be AppBootstrapper.");
 
-        var canSend =
-            this.WhenAnyValue<ChatRoomViewModel, bool, string>(
-                nameof(MessageText),
-                txt => !string.IsNullOrWhiteSpace(txt));
+        var canSend = this.WhenAnyValue(
+            static vm => vm.MessageText,
+            static txt => !string.IsNullOrWhiteSpace(txt));
         SendMessage = ReactiveCommand.Create(SendMessageImpl, canSend);
 
         NavigateBack = ReactiveCommand.CreateFromObservable(
-            () => hostScreen.Router.NavigateBack.Execute().Select(static _ => Unit.Default));
+            () => hostScreen.Router.NavigateBack.Execute().Select(static _ => RxVoid.Default));
 
         _canSendPropertyHelper = canSend.ToProperty(this, nameof(SendMessage));
 
         // Observe new incoming messages via MessageBus using the room name as the contract across instances
-        MessageBus.Current.Listen<ChatNetworkMessage>(room.Name)
-            .Throttle(TimeSpan.FromMilliseconds(33))
+        _ = MessageBus.Current.Listen<ChatNetworkMessage>(room.Name)
+            .EmitIfQuiet(TimeSpan.FromMilliseconds(IncomingMessageQuietWindowMilliseconds))
             .Where(x => x.InstanceId != _senderInstanceId)
-            .Subscribe(msg =>
+            .Subscribe(Witness.Create<ChatNetworkMessage>(msg =>
             {
-                // Since we share the room, message is already added there, so we just need to notify the UI
-                this.RaisePropertyChanged(nameof(Messages));
+                // Since we share the room, message is already added there, so we just need to notify the UI.
+                // Raise with an explicit PropertyChangedEventArgs so the reported property is 'Messages'.
+                // A bare RaisePropertyChanged() here would inject the enclosing constructor as the caller.
+                ((IReactiveObject)this).RaisePropertyChanged(new(nameof(Messages)));
                 Trace.TraceInformation($"[Room:{room.Name}] RX '{msg.Text}' from {msg.Sender}/{msg.InstanceId}");
-            });
+            }));
     }
 
     /// <inheritdoc />
@@ -83,19 +78,13 @@ public class ChatRoomViewModel : ReactiveObject, IRoutableViewModel
     /// <inheritdoc />
     public IScreen HostScreen { get; }
 
-    /// <summary>
-    /// Gets the room name.
-    /// </summary>
+    /// <summary>Gets the room name.</summary>
     public string RoomName => _room.Name;
 
-    /// <summary>
-    /// Gets the messages.
-    /// </summary>
+    /// <summary>Gets the messages.</summary>
     public IReadOnlyList<ChatMessage> Messages => _room.Messages;
 
-    /// <summary>
-    /// Gets or sets the message text.
-    /// </summary>
+    /// <summary>Gets or sets the message text.</summary>
     [SuppressMessage(
         "StyleCop.CSharp.LayoutRules",
         "SA1500:Braces should not share line",
@@ -111,32 +100,21 @@ public class ChatRoomViewModel : ReactiveObject, IRoutableViewModel
     }
 = string.Empty;
 
-    /// <summary>
-    /// Gets command to send a message.
-    /// </summary>
-    public ReactiveCommand<Unit, Unit> SendMessage { get; }
+    /// <summary>Gets command to send a message.</summary>
+    public ReactiveCommand<RxVoid, RxVoid> SendMessage { get; }
 
-    /// <summary>
-    /// Gets a value indicating whether sending operations are currently disabled.
-    /// </summary>
+    /// <summary>Gets a value indicating whether sending operations are currently disabled.</summary>
     public bool CanSendDisabled => !_canSendPropertyHelper.Value;
 
-    /// <summary>
-    /// Gets command to navigate back.
-    /// </summary>
-    public ReactiveCommand<Unit, Unit> NavigateBack { get; }
+    /// <summary>Gets command to navigate back.</summary>
+    public ReactiveCommand<RxVoid, RxVoid> NavigateBack { get; }
 
-    /// <summary>
-    /// Sends the current message text to the room and broadcasts it to peers.
-    /// </summary>
+    /// <summary>Sends the current message text to the room and broadcasts it to peers.</summary>
     private void SendMessageImpl()
     {
         var msg = new ChatMessage { Sender = _user, Text = MessageText, Timestamp = TimeProvider.System.GetUtcNow() };
         _room.Messages.Add(msg);
-        var networkMessage = new ChatNetworkMessage(_room.Id, _room.Name, msg.Sender, msg.Text, msg.Timestamp)
-        {
-            InstanceId = _senderInstanceId
-        };
+        var networkMessage = new ChatNetworkMessage(_room.Id, _room.Name, msg.Sender, msg.Text, msg.Timestamp) { InstanceId = _senderInstanceId };
 
         MessageBus.Current.SendMessage(networkMessage, RoomName);
         Trace.TraceInformation($"[Room:{_room.Name}] TX '{msg.Text}' from {_user}/{Services.AppInstance.Id}");

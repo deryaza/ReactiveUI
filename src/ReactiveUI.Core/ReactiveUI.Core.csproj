@@ -1,0 +1,60 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- Type-agnostic core: the seam-free (no RxVoid/ISequencer in public API) layer of ReactiveUI,
+         compiled once and referenced by both the lean ReactiveUI leaf and the ReactiveUI.Reactive leaf.
+         Keeps the ReactiveUI root namespace so split-out types stay where consumers expect them. -->
+    <TargetFrameworks>$(ReactiveUIPortableTargetFrameworks)</TargetFrameworks>
+    <AssemblyName>ReactiveUI.Core</AssemblyName>
+    <RootNamespace>ReactiveUI</RootNamespace>
+    <PackageId>ReactiveUI.Core</PackageId>
+    <PackageDescription>Type-agnostic core shared by ReactiveUI and ReactiveUI.Reactive.</PackageDescription>
+  </PropertyGroup>
+  <!-- Neutral (non-seam) namespaces the recompiled/shared source uses; the seam set lives in ReactiveShim.props. -->
+  <ItemGroup>
+    <Using Include="ReactiveUI.Internal"/>
+    <Using Include="ReactiveUI.Primitives.Disposables"/>
+  </ItemGroup>
+  <PropertyGroup Condition="$(TargetFramework.StartsWith('net8.0')) or $(TargetFramework.StartsWith('net9.0')) or $(TargetFramework.StartsWith('net10.0')) or $(TargetFramework.StartsWith('net11.0'))">
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+
+  <ItemGroup Condition="$(TargetFramework.StartsWith('netstandard')) or $(TargetFramework.StartsWith('net4'))">
+    <PackageReference Include="System.ComponentModel.Annotations"/>
+    <PackageReference Include="System.Text.Json"/>
+  </ItemGroup>
+
+  <!-- Cross-lib helper sources from src/Shared. Core owns the non-platform helpers (the leaves and
+       platform libs reach them via the Core reference + IVT). -->
+  <ItemGroup>
+    <Compile Include="..\Shared\ArgumentValidation.cs" Link="Shared\ArgumentValidation.cs"/>
+    <Compile Include="..\Shared\DelegateObserver.cs" Link="Shared\DelegateObserver.cs"/>
+    <Compile Include="..\Shared\TaskObserverBridge.cs" Link="Shared\TaskObserverBridge.cs"/>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="ReactiveUI.Primitives" ExcludeAssets="analyzers" />
+    <PackageReference Include="Splat" />
+    <!-- The [Reactive], [ReactiveCommand] and related generators ship in this package. ReactiveUI and
+         ReactiveUI.Reactive both build on this assembly, so none of its assets stay private and the generators
+         reach every consumer of either flavour. The generators pick the flavour from what the consumer references. -->
+    <PackageReference Include="ReactiveUI.SourceGenerators" PrivateAssets="none" />
+  </ItemGroup>
+
+  <!-- No IVT to the shipping leaves: boundary-crossing Core members are public (Primitives split rule).
+       This also lets each leaf own its polyfill copy without colliding with Core's. IVT is tests-only. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="ReactiveUI.Tests"/>
+    <InternalsVisibleTo Include="ReactiveUI.Reactive.Tests"/>
+    <InternalsVisibleTo Include="ReactiveUI.Test.Utilities"/>
+    <InternalsVisibleTo Include="ReactiveUI.TestGuiMocks"/>
+    <InternalsVisibleTo Include="ReactiveUI.NonParallel.Tests"/>
+    <InternalsVisibleTo Include="ReactiveUI.Wpf.Tests"/>
+    <InternalsVisibleTo Include="ReactiveUI.WinForms.Tests"/>
+    <InternalsVisibleTo Include="ReactiveUI.Uno"/>
+    <InternalsVisibleTo Include="ReactiveUI.Uno.WinUI"/>
+    <InternalsVisibleTo Include="ReactiveUI.Builder.Tests"/>
+    <InternalsVisibleTo Include="ReactiveUI.AOT.Tests"/>
+    <InternalsVisibleTo Include="ReactiveUI.Maui.Tests"/>
+    <InternalsVisibleTo Include="ReactiveUI.Avalonia"/>
+  </ItemGroup>
+</Project>

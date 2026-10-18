@@ -3,12 +3,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
 
-using System.Reactive.Concurrency;
-using System.Reactive.Linq;
 using System.Windows;
-
-using DynamicData;
-using ReactiveUI.Builder;
 using ReactiveUI.Tests.Utilities.AppBuilder;
 using ReactiveUI.Tests.Wpf.Mocks.ViewModelViewHosts;
 using ReactiveUI.Tests.Xaml.Mocks;
@@ -16,20 +11,23 @@ using TUnit.Core.Executors;
 
 namespace ReactiveUI.Tests.Wpf;
 
-/// <summary>
-/// Wpf Active Content Tests.
-/// </summary>
+/// <summary>Wpf Active Content Tests.</summary>
 [NotInParallel]
 public class WpfActiveContentTests
 {
+    /// <summary>The expected count when two items are present.</summary>
     private const int TwoItems = 2;
+
+    /// <summary>The expected count when three items are present.</summary>
     private const int ThreeItems = 3;
+
+    /// <summary>The result value produced by the save command.</summary>
     private const int SaveResultValue = 2;
+
+    /// <summary>The result value produced by the invalidate command.</summary>
     private const int InvalidateResultValue = 3;
 
-    /// <summary>
-    /// Validates binding logic for a list-backed view.
-    /// </summary>
+    /// <summary>Validates binding logic for a list-backed view.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     [TestExecutor<WpfTestExecutor>]
@@ -39,7 +37,7 @@ public class WpfActiveContentTests
         var vm = view.ViewModel!;
 
         // Activate the view to trigger bindings
-        view.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent));
+        view.RaiseEvent(new(FrameworkElement.LoadedEvent));
 
         // Test 1: Add first item
         var test1 = new MockBindListItemViewModel("Test1");
@@ -82,7 +80,8 @@ public class WpfActiveContentTests
     }
 
     /// <summary>
-    /// Verifies that ViewB is resolved when registered with the correct contract.
+    /// Verifies that ViewB is resolved when registered with the service locator under the correct contract. Only the
+    /// Unsafe host asks the service locator.
     /// </summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
@@ -90,11 +89,7 @@ public class WpfActiveContentTests
     public async Task ResolveViewBIfViewBIsRegistered()
     {
         var vm = new FakeViewWithContract.MyViewModel();
-        var host = new ViewModelViewHost
-        {
-            ViewModel = vm,
-            ViewContract = FakeViewWithContract.ContractB,
-        };
+        var host = new ViewModelViewHostUnsafe { ViewModel = vm, ViewContract = FakeViewWithContract.ContractB };
 
         // Simulate activation by raising the Loaded event
         var loaded = new RoutedEventArgs { RoutedEvent = FrameworkElement.LoadedEvent };
@@ -104,21 +99,14 @@ public class WpfActiveContentTests
         await Assert.That(host.Content).IsAssignableTo<FakeViewWithContract.ViewB>();
     }
 
-    /// <summary>
-    /// Verifies that View0 is used as fallback when ViewB is not registered.
-    /// </summary>
+    /// <summary>Verifies that View0 is used as fallback when ViewB is not registered.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     [TestExecutor<View0FallbackExecutor>]
     public async Task ResolveView0WithFallback()
     {
         var vm = new FakeViewWithContract.MyViewModel();
-        var host = new ViewModelViewHost
-        {
-            ViewModel = vm,
-            ViewContract = FakeViewWithContract.ContractB,
-            ContractFallbackByPass = false,
-        };
+        var host = new ViewModelViewHost { ViewModel = vm, ViewContract = FakeViewWithContract.ContractB, ContractFallbackByPass = false };
 
         // Simulate activation by raising the Loaded event
         var loaded = new RoutedEventArgs { RoutedEvent = FrameworkElement.LoadedEvent };
@@ -128,21 +116,14 @@ public class WpfActiveContentTests
         await Assert.That(host.Content).IsAssignableTo<FakeViewWithContract.View0>();
     }
 
-    /// <summary>
-    /// Verifies that no view is resolved when fallback bypass is enabled and ViewB is not registered.
-    /// </summary>
+    /// <summary>Verifies that no view is resolved when fallback bypass is enabled and ViewB is not registered.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     [TestExecutor<NoneWithBypassExecutor>]
     public async Task ResolveNoneWithFallbackBypass()
     {
         var vm = new FakeViewWithContract.MyViewModel();
-        var host = new ViewModelViewHost
-        {
-            ContractFallbackByPass = true,
-            ViewContract = FakeViewWithContract.ContractB,
-            ViewModel = vm,
-        };
+        var host = new ViewModelViewHost { ContractFallbackByPass = true, ViewContract = FakeViewWithContract.ContractB, ViewModel = vm };
 
         // Simulate activation by raising the Loaded event
         var loaded = new RoutedEventArgs { RoutedEvent = FrameworkElement.LoadedEvent };
@@ -151,9 +132,7 @@ public class WpfActiveContentTests
         await Assert.That(host.Content).IsNull();
     }
 
-    /// <summary>
-    /// Verifies the dummy suspension driver calls.
-    /// </summary>
+    /// <summary>Verifies the dummy suspension driver calls.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     public async Task DummySuspensionDriverTest()
@@ -162,153 +141,137 @@ public class WpfActiveContentTests
         int? loadResult = null;
         int? saveResult = null;
         int? invalidateResult = null;
-        dsd.LoadState().Select(static _ => 1).Subscribe(v => loadResult = v);
-        dsd.SaveState("Save Me").Select(static _ => SaveResultValue).Subscribe(v => saveResult = v);
-        dsd.InvalidateState().Select(static _ => InvalidateResultValue).Subscribe(v => invalidateResult = v);
+        _ = dsd.LoadState().Select(static _ => 1).Subscribe(v => loadResult = v);
+        _ = dsd.SaveState("Save Me").Select(static _ => SaveResultValue).Subscribe(v => saveResult = v);
+        _ = dsd.InvalidateState().Select(static _ => InvalidateResultValue).Subscribe(v => invalidateResult = v);
         await Assert.That(loadResult).IsEqualTo(1);
         await Assert.That(saveResult).IsEqualTo(SaveResultValue);
         await Assert.That(invalidateResult).IsEqualTo(InvalidateResultValue);
     }
 
-    /// <summary>
-    /// A test executor that registers the default, ContractA and ContractB views.
-    /// </summary>
-    public class ViewBRegisteredExecutor : STAThreadExecutor
+    /// <summary>A test executor that registers the default, ContractA and ContractB views.</summary>
+    public class ViewBRegisteredExecutor : DispatcherThreadExecutor
     {
-        /// <summary>
-        /// Helper that manages app builder setup and teardown for the test.
-        /// </summary>
+        /// <summary>Helper that manages app builder setup and teardown for the test.</summary>
         private readonly AppBuilderTestHelper _helper = new();
 
         /// <inheritdoc/>
-        protected override void Initialize()
+        protected override void SetUp()
         {
-            base.Initialize();
+            base.SetUp();
 
-            _helper.Initialize(builder =>
+            _helper.Initialize(static builder =>
             {
-                builder
+                _ = builder
                     .WithWpf()
-                    .WithRegistration(r => r.RegisterConstant<IViewFor<FakeViewWithContract.MyViewModel>>(new FakeViewWithContract.View0()))
-                    .WithRegistration(r => r.RegisterConstant<IViewFor<FakeViewWithContract.MyViewModel>>(new FakeViewWithContract.ViewA(), FakeViewWithContract.ContractA))
-                    .WithRegistration(r => r.RegisterConstant<IViewFor<FakeViewWithContract.MyViewModel>>(new FakeViewWithContract.ViewB(), FakeViewWithContract.ContractB))
-                    .WithMainThreadScheduler(ImmediateScheduler.Instance)
-                    .WithTaskPoolScheduler(ImmediateScheduler.Instance)
+                    .WithRegistration(static r => r.RegisterConstant<IViewFor<FakeViewWithContract.MyViewModel>>(new FakeViewWithContract.View0()))
+                    .WithRegistration(static r => r.RegisterConstant<IViewFor<FakeViewWithContract.MyViewModel>>(new FakeViewWithContract.ViewA(), FakeViewWithContract.ContractA))
+                    .WithRegistration(static r => r.RegisterConstant<IViewFor<FakeViewWithContract.MyViewModel>>(new FakeViewWithContract.ViewB(), FakeViewWithContract.ContractB))
+                    .WithMainThreadScheduler(Sequencer.Immediate)
+                    .WithTaskPoolScheduler(Sequencer.Immediate)
                     .WithCoreServices();
             });
         }
 
         /// <inheritdoc/>
-        protected override void CleanUp()
+        protected override void TearDown()
         {
             _helper.CleanUp();
-            base.CleanUp();
+            base.TearDown();
         }
     }
 
-    /// <summary>
-    /// A test executor that registers the default and ContractA views to test fallback resolution.
-    /// </summary>
-    public class View0FallbackExecutor : STAThreadExecutor
+    /// <summary>A test executor that registers the default and ContractA views to test fallback resolution.</summary>
+    public class View0FallbackExecutor : DispatcherThreadExecutor
     {
-        /// <summary>
-        /// Helper that manages app builder setup and teardown for the test.
-        /// </summary>
+        /// <summary>Helper that manages app builder setup and teardown for the test.</summary>
         private readonly AppBuilderTestHelper _helper = new();
 
         /// <inheritdoc/>
-        protected override void Initialize()
+        protected override void SetUp()
         {
-            base.Initialize();
+            base.SetUp();
 
-            _helper.Initialize(builder =>
+            _helper.Initialize(static builder =>
             {
-                builder
+                _ = builder
                     .WithWpf()
-                    .WithRegistration(r => r.RegisterConstant<IViewFor<FakeViewWithContract.MyViewModel>>(new FakeViewWithContract.View0()))
-                    .WithRegistration(r => r.RegisterConstant<IViewFor<FakeViewWithContract.MyViewModel>>(new FakeViewWithContract.ViewA(), FakeViewWithContract.ContractA))
-                    .WithMainThreadScheduler(ImmediateScheduler.Instance)
-                    .WithTaskPoolScheduler(ImmediateScheduler.Instance)
+                    .WithRegistration(static r => r.RegisterConstant<IViewFor<FakeViewWithContract.MyViewModel>>(new FakeViewWithContract.View0()))
+                    .WithRegistration(static r => r.RegisterConstant<IViewFor<FakeViewWithContract.MyViewModel>>(new FakeViewWithContract.ViewA(), FakeViewWithContract.ContractA))
+                    .WithMainThreadScheduler(Sequencer.Immediate)
+                    .WithTaskPoolScheduler(Sequencer.Immediate)
                     .WithCoreServices();
             });
         }
 
         /// <inheritdoc/>
-        protected override void CleanUp()
+        protected override void TearDown()
         {
             _helper.CleanUp();
-            base.CleanUp();
+            base.TearDown();
         }
     }
 
-    /// <summary>
-    /// A test executor that registers the default and ContractA views for bypass-resolution tests.
-    /// </summary>
-    public class NoneWithBypassExecutor : STAThreadExecutor
+    /// <summary>A test executor that registers the default and ContractA views for bypass-resolution tests.</summary>
+    public class NoneWithBypassExecutor : DispatcherThreadExecutor
     {
-        /// <summary>
-        /// Helper that manages app builder setup and teardown for the test.
-        /// </summary>
+        /// <summary>Helper that manages app builder setup and teardown for the test.</summary>
         private readonly AppBuilderTestHelper _helper = new();
 
         /// <inheritdoc/>
-        protected override void Initialize()
+        protected override void SetUp()
         {
-            base.Initialize();
+            base.SetUp();
 
-            _helper.Initialize(builder =>
+            _helper.Initialize(static builder =>
             {
-                builder
+                _ = builder
                     .WithWpf()
-                    .WithRegistration(r => r.RegisterConstant<IViewFor<FakeViewWithContract.MyViewModel>>(new FakeViewWithContract.View0()))
-                    .WithRegistration(r => r.RegisterConstant<IViewFor<FakeViewWithContract.MyViewModel>>(new FakeViewWithContract.ViewA(), FakeViewWithContract.ContractA))
-                    .WithMainThreadScheduler(ImmediateScheduler.Instance)
-                    .WithTaskPoolScheduler(ImmediateScheduler.Instance)
+                    .WithRegistration(static r => r.RegisterConstant<IViewFor<FakeViewWithContract.MyViewModel>>(new FakeViewWithContract.View0()))
+                    .WithRegistration(static r => r.RegisterConstant<IViewFor<FakeViewWithContract.MyViewModel>>(new FakeViewWithContract.ViewA(), FakeViewWithContract.ContractA))
+                    .WithMainThreadScheduler(Sequencer.Immediate)
+                    .WithTaskPoolScheduler(Sequencer.Immediate)
                     .WithCoreServices();
             });
         }
 
         /// <inheritdoc/>
-        protected override void CleanUp()
+        protected override void TearDown()
         {
             _helper.CleanUp();
-            base.CleanUp();
+            base.TearDown();
         }
     }
 
-    /// <summary>
-    /// A test executor that registers the default, ContractA and ContractB views.
-    /// </summary>
-    public class ExecutorBIfViewBIsRegistered : STAThreadExecutor
+    /// <summary>A test executor that registers the default, ContractA and ContractB views.</summary>
+    public class ExecutorBIfViewBIsRegistered : DispatcherThreadExecutor
     {
-        /// <summary>
-        /// Helper that manages app builder setup and teardown for the test.
-        /// </summary>
+        /// <summary>Helper that manages app builder setup and teardown for the test.</summary>
         private readonly AppBuilderTestHelper _helper = new();
 
         /// <inheritdoc/>
-        protected override void Initialize()
+        protected override void SetUp()
         {
-            base.Initialize();
+            base.SetUp();
 
-            _helper.Initialize(builder =>
+            _helper.Initialize(static builder =>
             {
-                builder
+                _ = builder
                     .WithWpf()
-                    .WithRegistration(r => r.RegisterConstant<IViewFor<FakeViewWithContract.MyViewModel>>(new FakeViewWithContract.View0()))
-                    .WithRegistration(r => r.RegisterConstant<IViewFor<FakeViewWithContract.MyViewModel>>(new FakeViewWithContract.ViewA(), FakeViewWithContract.ContractA))
-                    .WithRegistration(r => r.RegisterConstant<IViewFor<FakeViewWithContract.MyViewModel>>(new FakeViewWithContract.ViewB(), FakeViewWithContract.ContractB))
-                    .WithMainThreadScheduler(ImmediateScheduler.Instance)
-                    .WithTaskPoolScheduler(ImmediateScheduler.Instance)
+                    .WithRegistration(static r => r.RegisterConstant<IViewFor<FakeViewWithContract.MyViewModel>>(new FakeViewWithContract.View0()))
+                    .WithRegistration(static r => r.RegisterConstant<IViewFor<FakeViewWithContract.MyViewModel>>(new FakeViewWithContract.ViewA(), FakeViewWithContract.ContractA))
+                    .WithRegistration(static r => r.RegisterConstant<IViewFor<FakeViewWithContract.MyViewModel>>(new FakeViewWithContract.ViewB(), FakeViewWithContract.ContractB))
+                    .WithMainThreadScheduler(Sequencer.Immediate)
+                    .WithTaskPoolScheduler(Sequencer.Immediate)
                     .WithCoreServices();
             });
         }
 
         /// <inheritdoc/>
-        protected override void CleanUp()
+        protected override void TearDown()
         {
             _helper.CleanUp();
-            base.CleanUp();
+            base.TearDown();
         }
     }
 }

@@ -4,85 +4,81 @@
 // See the LICENSE file in the project root for full license information.
 
 using System.ComponentModel;
-using System.Reactive.Disposables.Fluent;
+using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
+using ReactiveUI.Primitives;
 
 namespace ReactiveUI.Samples.Winforms;
 
-/// <summary>
-/// A reactive login view demonstrating WhenActivated and reactive subscriptions for WinForms.
-/// </summary>
+/// <summary>A reactive login view demonstrating WhenActivated and reactive subscriptions for WinForms.</summary>
+[DebuggerDisplay("LoginView")]
 public sealed class LoginView : UserControl, IViewFor<LoginViewModel>
 {
-    /// <summary>
-    /// The text box bound to the view model's user name.
-    /// </summary>
-    private readonly TextBox _username = new() { PlaceholderText = "Username", Width = 240, Name = "Username" };
+    /// <summary>The padding, in pixels, around the vertical layout panel.</summary>
+    private const int LayoutPadding = 20;
 
-    /// <summary>
-    /// The text box bound to the view model's password.
-    /// </summary>
-    private readonly TextBox _password = new()
-    {
-        PlaceholderText = "Password", Width = 240, UseSystemPasswordChar = true, Name = "Password"
-    };
+    /// <summary>The width, in pixels, of each text box.</summary>
+    private const int TextBoxWidth = 240;
 
-    /// <summary>
-    /// The button bound to the view model's login command.
-    /// </summary>
-    private readonly Button _login = new() { Text = "Login", Width = 115, Name = "Login" };
+    /// <summary>The width, in pixels, of each button.</summary>
+    private const int ButtonWidth = 115;
 
-    /// <summary>
-    /// The button bound to the view model's cancel command.
-    /// </summary>
-    private readonly Button _cancel = new() { Text = "Cancel", Width = 115, Name = "Cancel" };
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="LoginView"/> class.
-    /// </summary>
+    /// <summary>Initializes a new instance of the <see cref="LoginView"/> class.</summary>
+    [SuppressMessage(
+        "Correctness",
+        "SST2403:Do not let 'this' escape from a constructor",
+        Justification = "Single-threaded sample view; WhenActivated captures this for activation-scoped binding after construction.")]
     public LoginView()
     {
-        var layout = new FlowLayoutPanel
-        {
-            Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, Padding = new(20), WrapContents = false
-        };
+        var layout = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, Padding = new(LayoutPadding), WrapContents = false };
 
-        layout.Controls.AddRange(_username, _password);
+        layout.Controls.AddRange(UserNameBox, PasswordBox);
 
         var buttons = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, AutoSize = true };
-        buttons.Controls.AddRange(_login, _cancel);
+        buttons.Controls.AddRange(LoginButton, CancelButton);
         layout.Controls.Add(buttons);
 
         Controls.Add(layout);
 
         ViewModel = new(RxSchedulers.MainThreadScheduler);
 
-        this.WhenActivated(d =>
+        _ = this.WhenActivated(d =>
         {
-            this.Bind(ViewModel, vm => vm.UserName, v => v._username.Text)
+            _ = this.Bind(ViewModel, vm => vm.UserName, v => v.UserNameBox.Text)
                 .DisposeWith(d);
 
-            this.Bind(ViewModel, vm => vm.Password, v => v._password.Text)
+            _ = this.Bind(ViewModel, vm => vm.Password, v => v.PasswordBox.Text)
                 .DisposeWith(d);
 
-            this.BindCommand(ViewModel, vm => vm.Login, v => v._login)
+            _ = this.BindCommand(ViewModel, vm => vm.Login, v => v.LoginButton)
                 .DisposeWith(d);
 
-            this.BindCommand(ViewModel, vm => vm.Cancel, v => v._cancel)
+            _ = this.BindCommand(ViewModel, vm => vm.Cancel, v => v.CancelButton)
                 .DisposeWith(d);
 
-            ViewModel.Login
-                .Subscribe(success => MessageBox.Show(
+            _ = ViewModel.Login
+                .Subscribe(static success => MessageBox.Show(
                     success ? "Welcome!" : "Invalid credentials.",
                     success ? "Login Successful" : "Login Failed"))
                 .DisposeWith(d);
         });
     }
 
-    /// <summary>
-    /// Gets or sets the view model for this view.
-    /// </summary>
+    /// <summary>Gets or sets the view model for this view.</summary>
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     public LoginViewModel? ViewModel { get; set; }
+
+    /// <summary>Gets the text box bound to the view model's user name.</summary>
+    internal TextBox UserNameBox { get; } = new() { PlaceholderText = "Username", Width = TextBoxWidth, Name = "Username" };
+
+    /// <summary>Gets the text box bound to the view model's password.</summary>
+    internal TextBox PasswordBox { get; } = new() { PlaceholderText = "Password", Width = TextBoxWidth, UseSystemPasswordChar = true, Name = "Password" };
+
+    /// <summary>Gets the button bound to the view model's login command.</summary>
+    internal Button LoginButton { get; } = new() { Text = "Login", Width = ButtonWidth, Name = "Login" };
+
+    /// <summary>Gets the button bound to the view model's cancel command.</summary>
+    internal Button CancelButton { get; } = new() { Text = "Cancel", Width = ButtonWidth, Name = "Cancel" };
 
     /// <inheritdoc/>
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
@@ -97,10 +93,10 @@ public sealed class LoginView : UserControl, IViewFor<LoginViewModel>
     {
         if (disposing)
         {
-            _username.Dispose();
-            _password.Dispose();
-            _login.Dispose();
-            _cancel.Dispose();
+            UserNameBox.Dispose();
+            PasswordBox.Dispose();
+            LoginButton.Dispose();
+            CancelButton.Dispose();
         }
 
         base.Dispose(disposing);

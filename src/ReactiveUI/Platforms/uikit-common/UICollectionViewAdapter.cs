@@ -4,40 +4,38 @@
 // See the LICENSE file in the project root for full license information.
 
 using System.Diagnostics;
-using System.Reactive.Concurrency;
-using System.Reactive.Subjects;
+using System.Runtime.CompilerServices;
 using Foundation;
 using UIKit;
 
 using NSAction = System.Action;
 
+#if REACTIVE_SHIM
+namespace ReactiveUI.Reactive;
+#else
 namespace ReactiveUI;
-
-/// <summary>
-/// Adapter that wraps a <see cref="UICollectionView"/> and implements <see cref="IUICollViewAdapter{TView,TCell}"/>.
-/// </summary>
+#endif
+/// <summary>Adapter that wraps a <see cref="UICollectionView"/> and implements <see cref="IUICollViewAdapter{TView,TCell}"/>.</summary>
 internal class UICollectionViewAdapter : IUICollViewAdapter<UICollectionView, UICollectionViewCell>, IDisposable
 {
     /// <summary>The underlying collection view being adapted.</summary>
     private readonly UICollectionView _view;
 
     /// <summary>Subject that tracks whether a data reload is currently in progress.</summary>
-    private readonly BehaviorSubject<bool> _isReloadingData;
+    private readonly BehaviorSignal<bool> _isReloadingData;
 
     /// <summary>The number of <see cref="ReloadData"/> calls that have not yet completed on the main thread.</summary>
     private int _inFlightReloads;
 
-    /// <summary>Whether this instance has already been disposed.</summary>
-    private bool _isDisposed;
+    /// <summary>Whether this instance has already been disposed. Non-zero once disposal has begun.</summary>
+    private int _isDisposed;
 
-    /// <summary>
-    /// Initializes a new instance of the <see cref="UICollectionViewAdapter"/> class.
-    /// </summary>
+    /// <summary>Initializes a new instance of the <see cref="UICollectionViewAdapter"/> class.</summary>
     /// <param name="view">The collection view to adapt.</param>
     internal UICollectionViewAdapter(UICollectionView view)
     {
         _view = view;
-        _isReloadingData = new BehaviorSubject<bool>(false);
+        _isReloadingData = new(false);
     }
 
     /// <inheritdoc/>
@@ -57,7 +55,7 @@ internal class UICollectionViewAdapter : IUICollViewAdapter<UICollectionView, UI
 
         // since ReloadData() queues the appropriate messages on the UI thread, we know we're done reloading
         // when this subsequent message is processed (with one caveat - see FinishReloadData for details)
-        RxSchedulers.MainThreadScheduler.Schedule(FinishReloadData);
+        _ = RxSchedulers.MainThreadScheduler.Schedule(FinishReloadData);
     }
 
     /// <summary>UICollectionView no longer has these methods so these are no-ops.</summary>
@@ -71,30 +69,39 @@ internal class UICollectionViewAdapter : IUICollViewAdapter<UICollectionView, UI
     }
 
     /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void PerformUpdates(NSAction updates, NSAction completion) => _view.PerformBatchUpdates(updates, _ => completion());
 
     /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void InsertSections(NSIndexSet indexes) => _view.InsertSections(indexes);
 
     /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void DeleteSections(NSIndexSet indexes) => _view.DeleteSections(indexes);
 
     /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void ReloadSections(NSIndexSet indexes) => _view.ReloadSections(indexes);
 
     /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void MoveSection(int fromIndex, int toIndex) => _view.MoveSection(fromIndex, toIndex);
 
     /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void InsertItems(NSIndexPath[] paths) => _view.InsertItems(paths);
 
     /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void DeleteItems(NSIndexPath[] paths) => _view.DeleteItems(paths);
 
     /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void ReloadItems(NSIndexPath[] paths) => _view.ReloadItems(paths);
 
     /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void MoveItem(NSIndexPath path, NSIndexPath newPath) => _view.MoveItem(path, newPath);
 
     /// <inheritdoc/>
@@ -107,28 +114,19 @@ internal class UICollectionViewAdapter : IUICollViewAdapter<UICollectionView, UI
         GC.SuppressFinalize(this);
     }
 
-    /// <summary>
-    /// Releases managed and unmanaged resources held by this instance.
-    /// </summary>
+    /// <summary>Releases managed and unmanaged resources held by this instance.</summary>
     /// <param name="isDisposing"><see langword="true"/> when called from <see cref="Dispose()"/>; <see langword="false"/> when called from a finalizer.</param>
     protected virtual void Dispose(bool isDisposing)
     {
-        if (_isDisposed)
+        if (Interlocked.Exchange(ref _isDisposed, 1) != 0 || !isDisposing)
         {
             return;
         }
 
-        if (isDisposing)
-        {
-            _isReloadingData?.Dispose();
-        }
-
-        _isDisposed = true;
+        _isReloadingData?.Dispose();
     }
 
-    /// <summary>
-    /// Decrements the in-flight reload counter and signals completion when all reloads are done.
-    /// </summary>
+    /// <summary>Decrements the in-flight reload counter and signals completion when all reloads are done.</summary>
     private void FinishReloadData()
     {
         --_inFlightReloads;

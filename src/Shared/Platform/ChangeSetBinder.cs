@@ -3,7 +3,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
 
-using ReactiveUI.Helpers;
+using System.Runtime.CompilerServices;
 
 namespace ReactiveUI.Internal;
 
@@ -21,7 +21,7 @@ internal sealed class ChangeSetBinder<T> : IDisposable
     private readonly List<T> _items = [];
 
     /// <summary>Optional per-change callback raised as each change is applied (fine-grained binding).</summary>
-    private readonly Action<ReactiveChange<T>>? _onChange;
+    private readonly ReactiveChangeHandler<T>? _onChange;
 
     /// <summary>Optional callback raised once after each batch is applied (coarse binding).</summary>
     private readonly Action? _onBatch;
@@ -35,7 +35,7 @@ internal sealed class ChangeSetBinder<T> : IDisposable
     /// <param name="onBatch">Optional callback raised once after each change-set batch is applied (coarse binding).</param>
     public ChangeSetBinder(
         IObservable<IReactiveChangeSet<T>> source,
-        Action<ReactiveChange<T>>? onChange = null,
+        ReactiveChangeHandler<T>? onChange = null,
         Action? onBatch = null)
     {
         ArgumentExceptionHelper.ThrowIfNull(source);
@@ -46,14 +46,15 @@ internal sealed class ChangeSetBinder<T> : IDisposable
     }
 
     /// <summary>Gets the number of materialized items.</summary>
-    public int Count => _items.Count;
+    internal int Count => _items.Count;
 
     /// <summary>Gets the materialized item at the specified index.</summary>
     /// <param name="index">The index.</param>
     /// <returns>The item at the index.</returns>
-    public T this[int index] => _items[index];
+    internal T this[int index] => _items[index];
 
     /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Dispose() => _subscription.Dispose();
 
     /// <summary>Applies a batch of changes to the backing list and raises the callbacks.</summary>
@@ -64,7 +65,7 @@ internal sealed class ChangeSetBinder<T> : IDisposable
         {
             var change = changeSet[i];
             Apply(change);
-            _onChange?.Invoke(change);
+            _onChange?.Invoke(in change);
         }
 
         _onBatch?.Invoke();
@@ -135,6 +136,11 @@ internal sealed class ChangeSetBinder<T> : IDisposable
             return;
         }
 
-        _items.Remove(item);
+        _ = _items.Remove(item);
     }
 }
+
+/// <summary>Applies a single materialized change, taken by readonly reference to avoid copying the change struct per call.</summary>
+/// <typeparam name="T">The element type.</typeparam>
+/// <param name="change">The change being applied.</param>
+internal delegate void ReactiveChangeHandler<T>(in ReactiveChange<T> change);

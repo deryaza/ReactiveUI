@@ -3,26 +3,30 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
 
+using System.Runtime.CompilerServices;
 using Android.Content;
+using Android.Hardware.Display;
+using Android.Runtime;
 using Android.Views;
 
+#if REACTIVE_SHIM
+namespace ReactiveUI.Reactive;
+#else
 namespace ReactiveUI;
-
-/// <summary>
-/// Returns the current orientation of the device on Android.
-/// </summary>
+#endif
+/// <summary>Returns the current orientation of the device on Android.</summary>
 public class PlatformOperations : IPlatformOperations
 {
     /// <inheritdoc/>
-    public string? GetOrientation()
-    {
-        if (Application.Context.GetSystemService(Context.WindowService) is not IWindowManager wm)
-        {
-            return null;
-        }
-
-        var disp = wm.DefaultDisplay;
-
-        return disp?.Rotation.ToString();
-    }
+    /// <remarks>
+    /// Reads the rotation of the default display through <see cref="DisplayManager"/>, which works from the
+    /// application context. <c>GetSystemService</c> returns an untyped Java peer, so the result is converted
+    /// with <c>JavaCast</c>; a C# type test on that peer always fails.
+    /// </remarks>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public string? GetOrientation() =>
+        Application.Context.GetSystemService(Context.DisplayService)
+            .JavaCast<DisplayManager>()?
+            .GetDisplay(Display.DefaultDisplay)?
+            .Rotation.ToString();
 }

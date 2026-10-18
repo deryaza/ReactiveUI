@@ -4,8 +4,13 @@
 // See the LICENSE file in the project root for full license information.
 
 using System.ComponentModel;
+using System.Diagnostics;
 
+#if REACTIVE_SHIM
+namespace ReactiveUI.Reactive.Winforms;
+#else
 namespace ReactiveUI.Winforms;
+#endif
 
 /// <summary>
 /// This is an  UserControl that is both and UserControl and has a ReactiveObject powers
@@ -14,12 +19,11 @@ namespace ReactiveUI.Winforms;
 /// <typeparam name="TViewModel">The type of the view model.</typeparam>
 /// <seealso cref="UserControl" />
 /// <seealso cref="IViewFor{TViewModel}" />
+[DebuggerDisplay("{ViewModel}")]
 public partial class ReactiveUserControl<TViewModel> : UserControl, IViewFor<TViewModel>
     where TViewModel : class
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="ReactiveUserControl{TViewModel}"/> class.
-    /// </summary>
+    /// <summary>Initializes a new instance of the <see cref="ReactiveUserControl{TViewModel}"/> class.</summary>
     public ReactiveUserControl() => InitializeComponent();
 
     /// <inheritdoc/>
@@ -36,9 +40,7 @@ public partial class ReactiveUserControl<TViewModel> : UserControl, IViewFor<TVi
         set => ViewModel = (TViewModel?)value;
     }
 
-    /// <summary>
-    /// Clean up any resources being used.
-    /// </summary>
+    /// <summary>Clean up any resources being used.</summary>
     /// <param name="disposing">true if managed resources should be disposed; otherwise, false.</param>
     protected override void Dispose(bool disposing)
     {

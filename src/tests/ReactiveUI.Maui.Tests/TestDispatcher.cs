@@ -7,10 +7,7 @@ using Microsoft.Maui.Dispatching;
 
 namespace ReactiveUI.Maui.Tests;
 
-/// <summary>
-/// Test dispatcher that executes actions synchronously for unit testing.
-/// Based on MAUI's internal test infrastructure.
-/// </summary>
+/// <summary>Test dispatcher that executes actions synchronously for unit testing. Based on MAUI's internal test infrastructure.</summary>
 internal sealed class TestDispatcher : IDispatcher
 {
     /// <inheritdoc/>
@@ -26,8 +23,8 @@ internal sealed class TestDispatcher : IDispatcher
     /// <inheritdoc/>
     public bool DispatchDelayed(TimeSpan delay, Action action)
     {
-        action();
-        return true;
+        _ = delay;
+        return Dispatch(action);
     }
 
     /// <inheritdoc/>

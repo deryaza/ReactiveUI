@@ -3,12 +3,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
 
-using System.Reactive.Concurrency;
 using System.Windows;
 using System.Windows.Threading;
-
-using DynamicData;
-using ReactiveUI.Builder;
 using ReactiveUI.Tests.Utilities;
 using ReactiveUI.Tests.Utilities.AppBuilder;
 using ReactiveUI.Tests.Wpf;
@@ -17,9 +13,7 @@ using TUnit.Core.Executors;
 
 namespace ReactiveUI.Tests.Xaml;
 
-/// <summary>
-/// Tests for ViewModelViewHost.
-/// </summary>
+/// <summary>Tests for ViewModelViewHost.</summary>
 /// <remarks>
 /// This test fixture is marked as NonParallelizable because tests modify
 /// global service locator state.
@@ -28,40 +22,28 @@ namespace ReactiveUI.Tests.Xaml;
 [TestExecutor<WpfTestExecutor>]
 public class ViewModelViewHostTests
 {
+    /// <summary>The expected activation sequence used to assert the host activates once.</summary>
     private static readonly bool[] _expectedActivated = [true];
 
-    /// <summary>
-    /// Verifies that the view-model view host shows its default content when activated with no view model.
-    /// </summary>
+    /// <summary>Verifies that the view-model view host shows its default content when activated with no view model.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     public async Task ViewModelViewHostDefaultContentNotNull()
     {
-        var uc = new ViewModelViewHost
-        {
-            DefaultContent = new System.Windows.Controls.Label()
-        };
+        var uc = new ViewModelViewHost { DefaultContent = new System.Windows.Controls.Label() };
 
         var activation = new ActivationForViewFetcher();
-        activation.GetActivationForView(uc)
-            .ToObservableChangeSet(scheduler: ImmediateScheduler.Instance)
-            .Bind(out var controlActivated)
-            .Subscribe();
+        var controlActivated = activation.GetActivationForView(uc).Collect();
 
         // Simulate activation by raising the Loaded event
-        var loaded = new RoutedEventArgs
-        {
-            RoutedEvent = FrameworkElement.LoadedEvent
-        };
+        var loaded = new RoutedEventArgs { RoutedEvent = FrameworkElement.LoadedEvent };
         uc.RaiseEvent(loaded);
 
         await _expectedActivated.AssertAreEqual(controlActivated);
         await Assert.That(uc.Content).IsNotNull();
     }
 
-    /// <summary>
-    /// Verifies the view-model view host resolves the matching view once activated.
-    /// </summary>
+    /// <summary>Verifies the view-model view host resolves the matching view once activated.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     [TestExecutor<WpfWithViewExecutor>]
@@ -69,20 +51,13 @@ public class ViewModelViewHostTests
     {
         var viewModel = new TestViewModel();
 
-        var uc = new ViewModelViewHost
-        {
-            DefaultContent = new System.Windows.Controls.Label(),
-            ViewModel = viewModel
-        };
+        var uc = new ViewModelViewHost { DefaultContent = new System.Windows.Controls.Label(), ViewModel = viewModel };
 
         var activation = new ActivationForViewFetcher();
-        activation.GetActivationForView(uc).ToObservableChangeSet(scheduler: ImmediateScheduler.Instance).Bind(out var controlActivated).Subscribe();
+        var controlActivated = activation.GetActivationForView(uc).Collect();
 
         // Simulate activation by raising the Loaded event
-        var loaded = new RoutedEventArgs
-        {
-            RoutedEvent = FrameworkElement.LoadedEvent
-        };
+        var loaded = new RoutedEventArgs { RoutedEvent = FrameworkElement.LoadedEvent };
         uc.RaiseEvent(loaded);
 
         await _expectedActivated.AssertAreEqual(controlActivated);
@@ -91,25 +66,21 @@ public class ViewModelViewHostTests
         await Assert.That(uc.Content).IsTypeOf<TestView>();
     }
 
-    /// <summary>
-    /// A test executor that registers the test view for view-resolution tests.
-    /// </summary>
-    public class WpfWithViewExecutor : STAThreadExecutor
+    /// <summary>A test executor that registers the test view for view-resolution tests.</summary>
+    public class WpfWithViewExecutor : DispatcherThreadExecutor
     {
-        /// <summary>
-        /// Helper that manages app builder setup and teardown for the test.
-        /// </summary>
+        /// <summary>Helper that manages app builder setup and teardown for the test.</summary>
         private readonly AppBuilderTestHelper _helper = new();
 
         /// <inheritdoc/>
-        protected override void Initialize()
+        protected override void SetUp()
         {
-            base.Initialize();
+            base.SetUp();
 
-            _helper.Initialize(builder =>
+            _helper.Initialize(static builder =>
             {
                 // Include WPF platform services and register test view
-                builder
+                _ = builder
                     .WithWpf()
                     .RegisterView<TestView, TestViewModel>()
                     .WithCoreServices();
@@ -117,17 +88,16 @@ public class ViewModelViewHostTests
                 // Configure WPF scheduler for test execution
                 // Note: WithWpf() skips scheduler setup when InUnitTestRunner() is true,
                 // so we must manually configure it for tests that need WPF controls
-                var dispatcher = Dispatcher.CurrentDispatcher;
-                RxSchedulers.MainThreadScheduler = new DispatcherScheduler(dispatcher);
-                RxSchedulers.TaskpoolScheduler = TaskPoolScheduler.Default;
+                RxSchedulers.MainThreadScheduler = new DispatcherSequencer(Dispatcher.CurrentDispatcher);
+                RxSchedulers.TaskpoolScheduler = TaskPoolSequencer.Default;
             });
         }
 
         /// <inheritdoc/>
-        protected override void CleanUp()
+        protected override void TearDown()
         {
             _helper.CleanUp();
-            base.CleanUp();
+            base.TearDown();
         }
     }
 }

@@ -12,6 +12,17 @@ on:
           - minor
           - major
 
+      channel:
+        description: 'Release channel. none = stable RTM; alpha/beta/rc cut a pre-release (e.g. major + beta -> 6.0.0-beta.1, then 6.0.0-beta.2). Finalise by re-running with the same bump and channel=none.'
+        required: true
+        default: none
+        type: choice
+        options:
+          - none
+          - alpha
+          - beta
+          - rc
+
       sourceRef:
         description: 'Optional git ref (tag/branch/SHA) to release from. Leave blank to release from this branch (normally main).'
         required: false
@@ -21,6 +32,7 @@ on:
 permissions:
   contents: write
   id-token: write
+  packages: read
 
 jobs:
   release:
@@ -28,8 +40,11 @@ jobs:
     with:
       solutionFile: reactiveui.slnx
       installWorkloads: true
+      # Release tags are unprefixed (e.g. 23.2.28); the workflow default is 'v'.
+      minverTagPrefix: ''
       bump: ${{ inputs.bump }}
-      ref: ${{ inputs.sourceRef }}
+      preRelease: ${{ inputs.channel != 'none' && inputs.channel || '' }}
+      sourceRef: ${{ inputs.sourceRef }}
     secrets:
       CERTUM_USER_ID: ${{ secrets.CERTUM_USER_ID }}
       CERTUM_OTP_URI: ${{ secrets.CERTUM_OTP_URI }}
@@ -44,12 +59,12 @@ jobs:
       id-token: write
     steps:
       - name: Download signed packages
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: signed-nuget
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
 
       - name: NuGet login (OIDC trusted publishing)
         id: nuget-login
@@ -71,3 +86,4 @@ jobs:
       version: ${{ needs.release.outputs.semver2 }}
       tag: ${{ needs.release.outputs.tag }}
       target: ${{ needs.release.outputs.sourceSha }}
+      prerelease: ${{ needs.release.outputs.prerelease == 'true' }}

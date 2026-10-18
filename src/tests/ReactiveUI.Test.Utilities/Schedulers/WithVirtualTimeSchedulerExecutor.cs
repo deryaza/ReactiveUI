@@ -3,7 +3,11 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
 
+#if REACTIVE_SHIM
+using ReactiveUI.Reactive.Builder;
+#else
 using ReactiveUI.Builder;
+#endif
 using ReactiveUI.Tests.Utilities.AppBuilder;
 
 namespace ReactiveUI.Tests.Utilities.Schedulers;
@@ -30,7 +34,7 @@ public class WithVirtualTimeSchedulerExecutor : BaseAppBuilderTestExecutor
         context.StateBag.Items["Scheduler"] = scheduler;
 
         // Configure builder with virtual time scheduler and core services
-        builder
+        _ = builder
             .WithMainThreadScheduler(scheduler)
             .WithTaskPoolScheduler(scheduler)
             .WithCoreServices();

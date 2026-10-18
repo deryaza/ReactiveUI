@@ -3,6 +3,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
 
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using ReactiveUI.Tests.Utilities.AppBuilder;
 using Splat;
@@ -14,14 +15,10 @@ using TUnit.Core.Executors;
 
 namespace ReactiveUI.Tests;
 
-/// <summary>
-///     Assembly-level hooks for test initialization and cleanup.
-/// </summary>
+/// <summary>Assembly-level hooks for test initialization and cleanup.</summary>
 public static class AssemblyHooks
 {
-    /// <summary>
-    ///     Called before any tests in this assembly start.
-    /// </summary>
+    /// <summary>Called before any tests in this assembly start.</summary>
     [Before(Assembly)]
     public static void AssemblySetup()
     {
@@ -38,10 +35,12 @@ public static class AssemblyHooks
         ModeDetector.OverrideModeDetector(new TestModeDetector());
     }
 
-    /// <summary>
-    ///     Called after all tests in this assembly complete.
-    /// </summary>
+    /// <summary>Called after all tests in this assembly complete.</summary>
     [After(Assembly)]
+    [SuppressMessage(
+        "Performance",
+        "PSH1021:Remove this 'GC.Collect'/'GC.WaitForPendingFinalizers' call",
+        Justification = "assembly teardown deliberately forces a final collection to release test-fixture resources before the process reports results.")]
     public static void AssemblyTeardown()
     {
         // Clean up resources
@@ -50,9 +49,7 @@ public static class AssemblyHooks
         GC.Collect();
     }
 
-    /// <summary>
-    ///     Mode detector that always indicates we're in a unit test runner.
-    /// </summary>
+    /// <summary>Mode detector that always indicates we're in a unit test runner.</summary>
     private sealed class TestModeDetector : IModeDetector
     {
         /// <inheritdoc/>

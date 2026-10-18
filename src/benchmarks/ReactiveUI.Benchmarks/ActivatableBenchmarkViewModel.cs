@@ -3,7 +3,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
 
-using System.Reactive.Disposables;
+using System.Runtime.CompilerServices;
 
 namespace ReactiveUI.Benchmarks;
 
@@ -11,19 +11,23 @@ namespace ReactiveUI.Benchmarks;
 /// An activatable view model with a <c>WhenActivated</c> block that registers a disposable, used to drive the
 /// activation benchmarks.
 /// </summary>
-internal sealed class ActivatableBenchmarkViewModel : ReactiveObject, IActivatableViewModel
+internal sealed class ActivatableBenchmarkViewModel : ReactiveObject, IActivatableViewModel, IDisposable
 {
     /// <summary>Initializes a new instance of the <see cref="ActivatableBenchmarkViewModel"/> class.</summary>
     public ActivatableBenchmarkViewModel() =>
         this.WhenActivated(disposables =>
         {
             ActivationCount++;
-            disposables(Disposable.Empty);
+            disposables(EmptyDisposable.Instance);
         });
 
     /// <summary>Gets the activator that drives the activation lifecycle.</summary>
     public ViewModelActivator Activator { get; } = new();
 
     /// <summary>Gets the number of times the activation block has run, so the work cannot be elided.</summary>
-    public long ActivationCount { get; private set; }
+    internal long ActivationCount { get; private set; }
+
+    /// <summary>Disposes the activator that drives the activation lifecycle.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void Dispose() => Activator.Dispose();
 }

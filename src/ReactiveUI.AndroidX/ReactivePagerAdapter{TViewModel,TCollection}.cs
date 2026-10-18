@@ -6,20 +6,24 @@
 using System.Collections.Specialized;
 using Android.Views;
 
+#if REACTIVE_SHIM
+namespace ReactiveUI.Reactive.AndroidX;
+#else
 namespace ReactiveUI.AndroidX;
-
+#endif
 /// <summary>
 /// ReactivePagerAdapter is a PagerAdapter that will interface with a
 /// Observable change set, in a similar fashion to ReactiveTableViewSource.
 /// </summary>
 /// <typeparam name="TViewModel">The view model type.</typeparam>
 /// <typeparam name="TCollection">The type of collection.</typeparam>
-/// <remarks>
-/// Initializes a new instance of the <see cref="ReactivePagerAdapter{TViewModel, TCollection}"/> class.
-/// </remarks>
 /// <param name="collection">The collection to page.</param>
 /// <param name="viewCreator">The function which will create the view.</param>
 /// <param name="viewInitializer">A action which will initialize the view.</param>
+/// <remarks>
+/// Initializes a new instance of the <see cref="ReactivePagerAdapter{TViewModel, TCollection}"/> class.
+/// </remarks>
+[System.Diagnostics.DebuggerDisplay("Count = {Count}")]
 public class ReactivePagerAdapter<TViewModel, TCollection>(
     TCollection collection,
     Func<TViewModel, ViewGroup, View> viewCreator,

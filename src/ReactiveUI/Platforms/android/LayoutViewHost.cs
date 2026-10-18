@@ -1,17 +1,19 @@
-﻿// Copyright (c) 2009-2026 .NET Foundation and Contributors. All rights reserved.
+// Copyright (c) 2009-2026 .NET Foundation and Contributors. All rights reserved.
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
 
 using System.Diagnostics.CodeAnalysis;
+using System.Runtime.CompilerServices;
 using Android.Content;
 using Android.Views;
-using ReactiveUI.Helpers;
 using Splat;
-using static ReactiveUI.ControlFetcherMixin;
 
+#if REACTIVE_SHIM
+namespace ReactiveUI.Reactive;
+#else
 namespace ReactiveUI;
-
+#endif
 /// <summary>
 /// Base class implementing the Android ViewHolder pattern.
 /// <para>
@@ -19,20 +21,17 @@ namespace ReactiveUI;
 /// optionally wires child controls to properties on the host.
 /// </para>
 /// <para>
-/// This type provides both AOT-safe construction paths and a legacy reflection-based
-/// auto-wireup path for compatibility.
+/// Every constructor is safe to trim and to compile ahead of time. Wire child controls in the <c>bind</c> callback,
+/// or derive from <see cref="LayoutViewHostUnsafe"/> to wire them by reflection.
 /// </para>
 /// </summary>
-public abstract class LayoutViewHost : ILayoutViewHost, IEnableLogger
+[System.Diagnostics.DebuggerDisplay("{View}")]
+public class LayoutViewHost : ILayoutViewHost, IEnableLogger
 {
-    /// <summary>
-    /// The backing view instance owned by this host.
-    /// </summary>
+    /// <summary>The backing view instance owned by this host.</summary>
     private View? _view;
 
-    /// <summary>
-    /// Initializes a new instance of the <see cref="LayoutViewHost"/> class.
-    /// </summary>
+    /// <summary>Initializes a new instance of the <see cref="LayoutViewHost"/> class.</summary>
     /// <remarks>
     /// This constructor performs no inflation or wiring and exists to support
     /// derived types that manage view creation manually.
@@ -41,10 +40,7 @@ public abstract class LayoutViewHost : ILayoutViewHost, IEnableLogger
     {
     }
 
-    /// <summary>
-    /// Initializes a new instance of the <see cref="LayoutViewHost"/> class by inflating
-    /// a layout resource.
-    /// </summary>
+    /// <summary>Initializes a new instance of the <see cref="LayoutViewHost"/> class by inflating a layout resource.</summary>
     /// <param name="context">The Android context.</param>
     /// <param name="layoutId">The layout resource identifier.</param>
     /// <param name="parent">The parent view group.</param>
@@ -70,10 +66,7 @@ public abstract class LayoutViewHost : ILayoutViewHost, IEnableLogger
         View = Inflate(context, layoutId, parent, attachToRoot);
     }
 
-    /// <summary>
-    /// Initializes a new instance of the <see cref="LayoutViewHost"/> class by inflating
-    /// a layout resource and invoking an explicit, AOT-safe binder.
-    /// </summary>
+    /// <summary>Initializes a new instance of the <see cref="LayoutViewHost"/> class by inflating a layout resource and invoking an explicit, AOT-safe binder.</summary>
     /// <param name="context">The Android context.</param>
     /// <param name="layoutId">The layout resource identifier.</param>
     /// <param name="parent">The parent view group.</param>
@@ -89,6 +82,10 @@ public abstract class LayoutViewHost : ILayoutViewHost, IEnableLogger
     /// The <paramref name="bind"/> callback is invoked only after <see cref="View"/> has been assigned.
     /// </para>
     /// </remarks>
+    [SuppressMessage(
+        "Design",
+        "SST2403:'this' escapes before construction finishes",
+        Justification = "'this' is handed to the caller-supplied bind callback, which runs only after View is assigned; the base constructor never publishes the host to another thread.")]
     protected LayoutViewHost(
         Context context,
         int layoutId,
@@ -107,52 +104,9 @@ public abstract class LayoutViewHost : ILayoutViewHost, IEnableLogger
         bind(this, View);
     }
 
-    /// <summary>
-    /// Initializes a new instance of the <see cref="LayoutViewHost"/> class by inflating
-    /// a layout resource and optionally performing reflection-based auto-wireup.
-    /// </summary>
-    /// <param name="context">The Android context.</param>
-    /// <param name="layoutId">The layout resource identifier.</param>
-    /// <param name="parent">The parent view group.</param>
-    /// <param name="attachToRoot">Whether to attach the inflated view to the parent.</param>
-    /// <param name="performAutoWireup">
-    /// If <see langword="true"/>, performs automatic wiring using reflection.
-    /// </param>
-    /// <param name="resolveStrategy">
-    /// The member resolution strategy used during auto-wireup.
-    /// </param>
-    /// <remarks>
-    /// <para>
-    /// This constructor is not trimming- or AOT-safe when auto-wireup is enabled.
-    /// </para>
-    /// <para>
-    /// It exists for backward compatibility and should be avoided in new code.
-    /// </para>
-    /// </remarks>
-    [RequiresUnreferencedCode("Auto wire-up uses reflection and member discovery.")]
-    [RequiresDynamicCode("Auto wire-up relies on runtime type inspection.")]
-    protected LayoutViewHost(
-        Context context,
-        int layoutId,
-        ViewGroup parent,
-        bool attachToRoot,
-        bool performAutoWireup,
-        ResolveStrategy resolveStrategy)
-    {
-        ArgumentExceptionHelper.ThrowIfNull(context);
-        ArgumentExceptionHelper.ThrowIfNull(parent);
-
-        View = Inflate(context, layoutId, parent, attachToRoot);
-
-        if (!performAutoWireup)
-        {
-            return;
-        }
-
-        this.WireUpControls(resolveStrategy);
-    }
-
     /// <inheritdoc />
+    /// <remarks>The host's own view, so auto-wireup never treats it as a control in the layout.</remarks>
+    [IgnoreResource]
     public View? View
     {
         get => _view;
@@ -169,9 +123,7 @@ public abstract class LayoutViewHost : ILayoutViewHost, IEnableLogger
         }
     }
 
-    /// <summary>
-    /// Implicitly converts a <see cref="LayoutViewHost"/> to its backing <see cref="View"/>.
-    /// </summary>
+    /// <summary>Implicitly converts a <see cref="LayoutViewHost"/> to its backing <see cref="View"/>.</summary>
     /// <param name="host">The host instance.</param>
     public static implicit operator View?(LayoutViewHost host)
     {
@@ -179,15 +131,12 @@ public abstract class LayoutViewHost : ILayoutViewHost, IEnableLogger
         return host._view;
     }
 
-    /// <summary>
-    /// Gets the backing <see cref="View"/> for this host as a friendly alternate to the implicit operator.
-    /// </summary>
+    /// <summary>Gets the backing <see cref="View"/> for this host as a friendly alternate to the implicit operator.</summary>
     /// <returns>The backing <see cref="View"/> instance, or <see langword="null"/> if none has been assigned.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public View? ToView() => _view;
 
-    /// <summary>
-    /// Inflates an Android layout resource into a <see cref="View"/> using the provided context.
-    /// </summary>
+    /// <summary>Inflates an Android layout resource into a <see cref="View"/> using the provided context.</summary>
     /// <param name="context">The Android context used to obtain a <see cref="LayoutInflater"/>.</param>
     /// <param name="layoutId">The layout resource identifier to inflate.</param>
     /// <param name="parent">

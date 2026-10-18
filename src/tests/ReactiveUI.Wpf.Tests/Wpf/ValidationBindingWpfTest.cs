@@ -3,28 +3,36 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
 
-using System.Diagnostics.CodeAnalysis;
 using System.Linq.Expressions;
 using System.Windows;
 using System.Windows.Controls;
-using ReactiveUI.Wpf.Binding;
 using TUnit.Core.Executors;
 using Control = System.Windows.Controls.Control;
+using Expression = System.Linq.Expressions.Expression;
 
 namespace ReactiveUI.Tests.Wpf;
 
-/// <summary>
-/// Tests for <see cref="ValidationBindingWpf{TView, TViewModel, TVProp, TVMProp}"/>.
-/// </summary>
+/// <summary>Tests for <see cref="ValidationBindingWpf{TView, TViewModel, TVProp, TVMProp}"/>.</summary>
 [NotInParallel]
 [TestExecutor<WpfTestExecutor>]
 public class ValidationBindingWpfTest
 {
+    /// <summary>The delay, in milliseconds, before the test observable emits a value.</summary>
     private const int ObservableEmitDelayMs = 100;
 
-    /// <summary>
-    /// Tests that ExtractPropertyPath correctly extracts simple property path.
-    /// </summary>
+    /// <summary>The width and height used to realize a control's visual tree.</summary>
+    private const double VisualTreeSize = 100;
+
+    /// <summary>The initial view-model property value used by the binding tests.</summary>
+    private const string InitialValue = "initial";
+
+    /// <summary>The grid row index applied when testing attached-property resolution.</summary>
+    private const int GridRow = 1;
+
+    /// <summary>The control name shared by two elements to exercise duplicate-name resolution.</summary>
+    private const string DuplicateControlName = "DuplicateName";
+
+    /// <summary>Tests that ExtractPropertyPath correctly extracts simple property path.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     public async Task ExtractPropertyPath_ExtractsSimplePropertyPath()
@@ -37,9 +45,7 @@ public class ValidationBindingWpfTest
         await Assert.That(result).IsEqualTo("TestProperty");
     }
 
-    /// <summary>
-    /// Tests that ExtractPropertyPath correctly extracts nested property path.
-    /// </summary>
+    /// <summary>Tests that ExtractPropertyPath correctly extracts nested property path.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     public async Task ExtractPropertyPath_ExtractsNestedPropertyPath()
@@ -52,9 +58,7 @@ public class ValidationBindingWpfTest
         await Assert.That(result).IsEqualTo("NestedObject.Name");
     }
 
-    /// <summary>
-    /// Tests that ExtractControlName correctly extracts control name from expression chain.
-    /// </summary>
+    /// <summary>Tests that ExtractControlName correctly extracts control name from expression chain.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     public async Task ExtractControlName_ExtractsControlName()
@@ -68,41 +72,35 @@ public class ValidationBindingWpfTest
         await Assert.That(result).IsEqualTo("TestControl");
     }
 
-    /// <summary>
-    /// Tests that ExtractControlName throws ArgumentException when expression chain is too short.
-    /// </summary>
+    /// <summary>Tests that ExtractControlName throws ArgumentException when expression chain is too short.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     public async Task ExtractControlName_ThrowsWhenChainTooShort()
     {
-        var chain = new System.Linq.Expressions.Expression[] { System.Linq.Expressions.Expression.Constant("value") };
+        var chain = new Expression[] { Expression.Constant("value") };
 
         await Assert.That(() => ValidationBindingWpf<TestView, TestViewModel, Control, string>.ExtractControlName(chain, typeof(TestView)))
             .Throws<ArgumentException>();
     }
 
-    /// <summary>
-    /// Tests that ExtractControlName throws exception for invalid expression chain.
-    /// </summary>
+    /// <summary>Tests that ExtractControlName throws exception for invalid expression chain.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     public async Task ExtractControlName_ThrowsForInvalidExpressionChain()
     {
         // Create an invalid expression chain
-        var chain = new System.Linq.Expressions.Expression[]
+        var chain = new Expression[]
         {
-            System.Linq.Expressions.Expression.Parameter(typeof(TestView), "view"),
-            System.Linq.Expressions.Expression.Constant(new TextBox()),
-            System.Linq.Expressions.Expression.Property(System.Linq.Expressions.Expression.Constant(new TextBox()), "Text")
+            Expression.Parameter(typeof(TestView), "view"),
+            Expression.Constant(new TextBox()),
+            Expression.Property(Expression.Constant(new TextBox()), "Text"),
         };
 
         await Assert.That(() => ValidationBindingWpf<TestView, TestViewModel, Control, string>.ExtractControlName(chain, typeof(TestView)))
             .Throws<NotSupportedException>();
     }
 
-    /// <summary>
-    /// Tests that EnumerateDependencyProperties returns empty when element is null.
-    /// </summary>
+    /// <summary>Tests that EnumerateDependencyProperties returns empty when element is null.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     public async Task EnumerateDependencyProperties_ReturnsEmptyForNullElement()
@@ -112,9 +110,7 @@ public class ValidationBindingWpfTest
         await Assert.That(result.Any()).IsFalse();
     }
 
-    /// <summary>
-    /// Tests that EnumerateDependencyProperties returns properties for valid element.
-    /// </summary>
+    /// <summary>Tests that EnumerateDependencyProperties returns properties for valid element.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     public async Task EnumerateDependencyProperties_ReturnsPropertiesForValidElement()
@@ -124,12 +120,10 @@ public class ValidationBindingWpfTest
         var result = ValidationBindingWpf<TestView, TestViewModel, Control, string>.EnumerateDependencyProperties(textBox).ToList();
 
         await Assert.That(result).IsNotEmpty();
-        await Assert.That(result.Exists(dp => dp.Name == "Text")).IsTrue();
+        await Assert.That(result.Exists(static dp => dp.Name == "Text")).IsTrue();
     }
 
-    /// <summary>
-    /// Tests that EnumerateAttachedProperties returns empty when element is null.
-    /// </summary>
+    /// <summary>Tests that EnumerateAttachedProperties returns empty when element is null.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     public async Task EnumerateAttachedProperties_ReturnsEmptyForNullElement()
@@ -139,9 +133,7 @@ public class ValidationBindingWpfTest
         await Assert.That(result.Any()).IsFalse();
     }
 
-    /// <summary>
-    /// Tests that GetDependencyProperty returns null when element is null.
-    /// </summary>
+    /// <summary>Tests that GetDependencyProperty returns null when element is null.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     public async Task GetDependencyProperty_ReturnsNullForNullElement()
@@ -151,9 +143,7 @@ public class ValidationBindingWpfTest
         await Assert.That(result).IsNull();
     }
 
-    /// <summary>
-    /// Tests that GetDependencyProperty returns null when name is null.
-    /// </summary>
+    /// <summary>Tests that GetDependencyProperty returns null when name is null.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     public async Task GetDependencyProperty_ReturnsNullForNullName()
@@ -165,9 +155,7 @@ public class ValidationBindingWpfTest
         await Assert.That(result).IsNull();
     }
 
-    /// <summary>
-    /// Tests that GetDependencyProperty returns null when name is empty.
-    /// </summary>
+    /// <summary>Tests that GetDependencyProperty returns null when name is empty.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     public async Task GetDependencyProperty_ReturnsNullForEmptyName()
@@ -179,9 +167,7 @@ public class ValidationBindingWpfTest
         await Assert.That(result).IsNull();
     }
 
-    /// <summary>
-    /// Tests that GetDependencyProperty finds property by name.
-    /// </summary>
+    /// <summary>Tests that GetDependencyProperty finds property by name.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     public async Task GetDependencyProperty_FindsPropertyByName()
@@ -194,9 +180,7 @@ public class ValidationBindingWpfTest
         await Assert.That(result!.Name).IsEqualTo("Text");
     }
 
-    /// <summary>
-    /// Tests that GetDependencyProperty returns null for non-existent property.
-    /// </summary>
+    /// <summary>Tests that GetDependencyProperty returns null for non-existent property.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     public async Task GetDependencyProperty_ReturnsNullForNonExistentProperty()
@@ -208,9 +192,7 @@ public class ValidationBindingWpfTest
         await Assert.That(result).IsNull();
     }
 
-    /// <summary>
-    /// Tests that FindControlByName returns null when parent is null.
-    /// </summary>
+    /// <summary>Tests that FindControlByName returns null when parent is null.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     public async Task FindControlByName_ReturnsNullForNullParent()
@@ -220,9 +202,7 @@ public class ValidationBindingWpfTest
         await Assert.That(result).IsNull();
     }
 
-    /// <summary>
-    /// Tests that FindControlByName returns null when name is null.
-    /// </summary>
+    /// <summary>Tests that FindControlByName returns null when name is null.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     public async Task FindControlByName_ReturnsNullForNullName()
@@ -234,9 +214,7 @@ public class ValidationBindingWpfTest
         await Assert.That(result).IsNull();
     }
 
-    /// <summary>
-    /// Tests that FindControlByName returns null when name is empty.
-    /// </summary>
+    /// <summary>Tests that FindControlByName returns null when name is empty.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     public async Task FindControlByName_ReturnsNullForEmptyName()
@@ -248,9 +226,7 @@ public class ValidationBindingWpfTest
         await Assert.That(result).IsNull();
     }
 
-    /// <summary>
-    /// Tests that FindControlByName returns null when name is whitespace.
-    /// </summary>
+    /// <summary>Tests that FindControlByName returns null when name is whitespace.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     public async Task FindControlByName_ReturnsNullForWhitespaceName()
@@ -262,16 +238,14 @@ public class ValidationBindingWpfTest
         await Assert.That(result).IsNull();
     }
 
-    /// <summary>
-    /// Tests that FindControlByName finds direct child control.
-    /// </summary>
+    /// <summary>Tests that FindControlByName finds direct child control.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     public async Task FindControlByName_FindsDirectChild()
     {
         var panel = new StackPanel();
         var textBox = new TextBox { Name = "TestTextBox" };
-        panel.Children.Add(textBox);
+        _ = panel.Children.Add(textBox);
 
         var result = ValidationBindingWpf<TestView, TestViewModel, Control, string>.FindControlByName(panel, "TestTextBox");
 
@@ -279,9 +253,7 @@ public class ValidationBindingWpfTest
         await Assert.That(result).IsSameReferenceAs(textBox);
     }
 
-    /// <summary>
-    /// Tests that FindControlByName finds nested control.
-    /// </summary>
+    /// <summary>Tests that FindControlByName finds nested control.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     public async Task FindControlByName_FindsNestedControl()
@@ -290,8 +262,8 @@ public class ValidationBindingWpfTest
         var innerPanel = new StackPanel();
         var textBox = new TextBox { Name = "NestedTextBox" };
 
-        innerPanel.Children.Add(textBox);
-        outerPanel.Children.Add(innerPanel);
+        _ = innerPanel.Children.Add(textBox);
+        _ = outerPanel.Children.Add(innerPanel);
 
         var result = ValidationBindingWpf<TestView, TestViewModel, Control, string>.FindControlByName(outerPanel, "NestedTextBox");
 
@@ -299,44 +271,38 @@ public class ValidationBindingWpfTest
         await Assert.That(result).IsSameReferenceAs(textBox);
     }
 
-    /// <summary>
-    /// Tests that FindControlByName returns null when control not found.
-    /// </summary>
+    /// <summary>Tests that FindControlByName returns null when control not found.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     public async Task FindControlByName_ReturnsNullWhenNotFound()
     {
         var panel = new StackPanel();
         var textBox = new TextBox { Name = "TextBox1" };
-        panel.Children.Add(textBox);
+        _ = panel.Children.Add(textBox);
 
         var result = ValidationBindingWpf<TestView, TestViewModel, Control, string>.FindControlByName(panel, "NonExistentControl");
 
         await Assert.That(result).IsNull();
     }
 
-    /// <summary>
-    /// Tests that FindControlByName returns first matching control when multiple exist.
-    /// </summary>
+    /// <summary>Tests that FindControlByName returns first matching control when multiple exist.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     public async Task FindControlByName_ReturnsFirstMatchWhenMultipleExist()
     {
         var panel = new StackPanel();
-        var textBox1 = new TextBox { Name = "DuplicateName" };
-        var textBox2 = new TextBox { Name = "DuplicateName" };
-        panel.Children.Add(textBox1);
-        panel.Children.Add(textBox2);
+        var textBox1 = new TextBox { Name = DuplicateControlName };
+        var textBox2 = new TextBox { Name = DuplicateControlName };
+        _ = panel.Children.Add(textBox1);
+        _ = panel.Children.Add(textBox2);
 
-        var result = ValidationBindingWpf<TestView, TestViewModel, Control, string>.FindControlByName(panel, "DuplicateName");
+        var result = ValidationBindingWpf<TestView, TestViewModel, Control, string>.FindControlByName(panel, DuplicateControlName);
 
         await Assert.That(result).IsNotNull();
         await Assert.That(result).IsSameReferenceAs(textBox1);
     }
 
-    /// <summary>
-    /// Tests that constructor throws ArgumentException when control not found.
-    /// </summary>
+    /// <summary>Tests that constructor throws ArgumentException when control not found.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     public async Task Constructor_ThrowsWhenControlNotFound()
@@ -352,9 +318,7 @@ public class ValidationBindingWpfTest
             .Throws<ArgumentException>();
     }
 
-    /// <summary>
-    /// Tests that constructor throws ArgumentException when dependency property not found.
-    /// </summary>
+    /// <summary>Tests that constructor throws ArgumentException when dependency property not found.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     public async Task Constructor_ThrowsWhenDependencyPropertyNotFound()
@@ -380,9 +344,7 @@ public class ValidationBindingWpfTest
         }
     }
 
-    /// <summary>
-    /// Tests that Dispose clears the binding.
-    /// </summary>
+    /// <summary>Tests that Dispose clears the binding.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     public async Task Dispose_ClearsBinding()
@@ -410,9 +372,7 @@ public class ValidationBindingWpfTest
         }
     }
 
-    /// <summary>
-    /// Tests that Changed observable is not null.
-    /// </summary>
+    /// <summary>Tests that Changed observable is not null.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     public async Task Changed_IsNotNull()
@@ -439,9 +399,7 @@ public class ValidationBindingWpfTest
         }
     }
 
-    /// <summary>
-    /// Tests that Direction is TwoWay.
-    /// </summary>
+    /// <summary>Tests that Direction is TwoWay.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     public async Task Direction_IsTwoWay()
@@ -468,15 +426,13 @@ public class ValidationBindingWpfTest
         }
     }
 
-    /// <summary>
-    /// Tests that Changed observable emits when view model property changes.
-    /// </summary>
+    /// <summary>Tests that Changed observable emits when view model property changes.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     public async Task Changed_EmitsWhenViewModelPropertyChanges()
     {
         var view = new TestViewWithControl();
-        var viewModel = new TestViewModel { TestProperty = "initial" };
+        var viewModel = new TestViewModel { TestProperty = InitialValue };
 
         try
         {
@@ -506,15 +462,13 @@ public class ValidationBindingWpfTest
         }
     }
 
-    /// <summary>
-    /// Tests that Changed observable emits when view property changes.
-    /// </summary>
+    /// <summary>Tests that Changed observable emits when view property changes.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     public async Task Changed_EmitsWhenViewPropertyChanges()
     {
         var view = new TestViewWithControl();
-        var viewModel = new TestViewModel { TestProperty = "initial" };
+        var viewModel = new TestViewModel { TestProperty = InitialValue };
 
         try
         {
@@ -545,9 +499,7 @@ public class ValidationBindingWpfTest
         }
     }
 
-    /// <summary>
-    /// Tests that ExtractPropertyPath handles multiple property levels.
-    /// </summary>
+    /// <summary>Tests that ExtractPropertyPath handles multiple property levels.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     public async Task ExtractPropertyPath_HandlesMultipleLevels()
@@ -561,9 +513,7 @@ public class ValidationBindingWpfTest
         await Assert.That(result).IsNotEmpty();
     }
 
-    /// <summary>
-    /// Tests that FindControlByName handles deeply nested controls.
-    /// </summary>
+    /// <summary>Tests that FindControlByName handles deeply nested controls.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     public async Task FindControlByName_HandlesDeeplyNestedControls()
@@ -573,9 +523,9 @@ public class ValidationBindingWpfTest
         var level3 = new StackPanel();
         var deepControl = new TextBox { Name = "DeepControl" };
 
-        level3.Children.Add(deepControl);
-        level2.Children.Add(level3);
-        level1.Children.Add(level2);
+        _ = level3.Children.Add(deepControl);
+        _ = level2.Children.Add(level3);
+        _ = level1.Children.Add(level2);
 
         var result = ValidationBindingWpf<TestView, TestViewModel, Control, string>.FindControlByName(level1, "DeepControl");
 
@@ -583,9 +533,7 @@ public class ValidationBindingWpfTest
         await Assert.That(result).IsSameReferenceAs(deepControl);
     }
 
-    /// <summary>
-    /// Tests that Bind creates a valid binding.
-    /// </summary>
+    /// <summary>Tests that Bind creates a valid binding.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     public async Task Bind_CreatesValidBinding()
@@ -615,14 +563,175 @@ public class ValidationBindingWpfTest
         }
     }
 
+    /// <summary>With a realized visual tree the constructor finds the control and binds successfully.</summary>
+    /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
+    [Test]
+    public async Task Constructor_WithRealizedVisualTree_BindsSuccessfully()
+    {
+        var view = new TestRealizedView();
+        var viewModel = new TestViewModel { TestProperty = InitialValue };
+
+        // Realize the visual tree so FindControlByName can locate the named control via the VisualTreeHelper.
+        view.Measure(new(VisualTreeSize, VisualTreeSize));
+        view.Arrange(new(0, 0, VisualTreeSize, VisualTreeSize));
+        view.UpdateLayout();
+
+        using var binding = new ValidationBindingWpf<TestRealizedView, TestViewModel, object, string>(
+            view,
+            viewModel,
+            vm => vm.TestProperty,
+            v => v.MyTextBox.Text);
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(binding.Direction).IsEqualTo(BindingDirection.TwoWay);
+            await Assert.That(binding.Changed).IsNotNull();
+            await Assert.That(binding.View).IsSameReferenceAs(view);
+        }
+    }
+
+    /// <summary>With a realized visual tree the two-way binding propagates a view model change to the control.</summary>
+    /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
+    [Test]
+    public async Task Constructor_WithRealizedVisualTree_PropagatesViewModelToControl()
+    {
+        var view = new TestRealizedView();
+        var viewModel = new TestViewModel { TestProperty = InitialValue };
+
+        view.Measure(new(VisualTreeSize, VisualTreeSize));
+        view.Arrange(new(0, 0, VisualTreeSize, VisualTreeSize));
+        view.UpdateLayout();
+
+        using var binding = new ValidationBindingWpf<TestRealizedView, TestViewModel, object, string>(
+            view,
+            viewModel,
+            vm => vm.TestProperty,
+            v => v.MyTextBox.Text);
+
+        viewModel.TestProperty = "updated";
+        await Task.Delay(ObservableEmitDelayMs);
+
+        await Assert.That(view.MyTextBox.Text).IsEqualTo("updated");
+    }
+
     /// <summary>
-    /// A mock view used by the WPF validation binding tests.
+    /// With a realized visual tree, subscribing to <c>Changed</c> and mutating the view model emits the new value, and
+    /// mutating the view emits a default value — driving the internal change observable's view-model and view branches.
     /// </summary>
+    /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
+    [Test]
+    public async Task Changed_OnRealizedView_EmitsForViewModelAndViewChanges()
+    {
+        var view = new TestRealizedView();
+        var viewModel = new TestViewModel { TestProperty = InitialValue };
+
+        view.Measure(new(VisualTreeSize, VisualTreeSize));
+        view.Arrange(new(0, 0, VisualTreeSize, VisualTreeSize));
+        view.UpdateLayout();
+
+        using var binding = new ValidationBindingWpf<TestRealizedView, TestViewModel, object, string>(
+            view,
+            viewModel,
+            vm => vm.TestProperty,
+            v => v.MyTextBox.Text);
+
+        var emissionCount = 0;
+        using (var subscription = binding.Changed.Subscribe(_ => emissionCount++))
+        {
+            // Both the view-model branch (on a view-model change) and the view branch (on a view change) push through
+            // the fused change observer, so the subscription receives emissions from both sources.
+            viewModel.TestProperty = "vm-changed";
+            await Task.Delay(ObservableEmitDelayMs);
+            view.MyTextBox.Text = "view-changed";
+            await Task.Delay(ObservableEmitDelayMs);
+        }
+
+        await Assert.That(emissionCount).IsGreaterThan(0);
+    }
+
+    /// <summary>With a realized visual tree, disposing the binding twice tears the binding down once and is idempotent.</summary>
+    /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
+    [Test]
+    public async Task Dispose_OnRealizedView_IsIdempotent()
+    {
+        var view = new TestRealizedView();
+        var viewModel = new TestViewModel { TestProperty = InitialValue };
+
+        view.Measure(new(VisualTreeSize, VisualTreeSize));
+        view.Arrange(new(0, 0, VisualTreeSize, VisualTreeSize));
+        view.UpdateLayout();
+
+        var binding = new ValidationBindingWpf<TestRealizedView, TestViewModel, object, string>(
+            view,
+            viewModel,
+            vm => vm.TestProperty,
+            v => v.MyTextBox.Text);
+
+        // Disposing twice must be idempotent: the second call short-circuits on the already-disposed flag.
+        binding.Dispose();
+        binding.Dispose();
+
+        // After the binding is cleared, further view-model changes no longer reach the control.
+        viewModel.TestProperty = "after-dispose";
+        await Task.Delay(ObservableEmitDelayMs);
+
+        await Assert.That(view.MyTextBox.Text).IsNotEqualTo("after-dispose");
+    }
+
+    /// <summary>
+    /// With a realized visual tree where the named control exists but the requested view property is not a dependency
+    /// property, the constructor throws an <see cref="ArgumentException"/> naming the view property.
+    /// </summary>
+    /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
+    [Test]
+    public async Task Constructor_OnRealizedView_ThrowsWhenDependencyPropertyMissing()
+    {
+        var view = new TestViewWithPlainControl();
+        var viewModel = new TestViewModel { TestProperty = InitialValue };
+
+        view.Measure(new(VisualTreeSize, VisualTreeSize));
+        view.Arrange(new(0, 0, VisualTreeSize, VisualTreeSize));
+        view.UpdateLayout();
+
+        await Assert.That(() => new ValidationBindingWpf<TestViewWithPlainControl, TestViewModel, object, string>(
+                view,
+                viewModel,
+                vm => vm.TestProperty,
+                v => v.Holder.NotADependencyProperty))
+            .Throws<ArgumentException>();
+    }
+
+    /// <summary>GetDependencyProperty resolves an attached property (Grid.Row) by name via the markup enumeration path.</summary>
+    /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
+    [Test]
+    public async Task GetDependencyProperty_FindsAttachedProperty()
+    {
+        var textBox = new TextBox();
+        Grid.SetRow(textBox, GridRow);
+
+        // The attached property surfaces through the markup-object enumeration under its short name ("Row").
+        var result = ValidationBindingWpf<TestView, TestViewModel, Control, string>.GetDependencyProperty(textBox, "Row");
+
+        await Assert.That(result).IsSameReferenceAs(Grid.RowProperty);
+    }
+
+    /// <summary>EnumerateAttachedProperties returns the attached properties applied to an element.</summary>
+    /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
+    [Test]
+    public async Task EnumerateAttachedProperties_ReturnsAttachedProperties()
+    {
+        var textBox = new TextBox();
+        Grid.SetRow(textBox, GridRow);
+
+        var result = ValidationBindingWpf<TestView, TestViewModel, Control, string>.EnumerateAttachedProperties(textBox).ToList();
+
+        await Assert.That(result.Exists(static dp => dp == Grid.RowProperty)).IsTrue();
+    }
+
+    /// <summary>A mock view used by the WPF validation binding tests.</summary>
     private sealed class TestView : Control, IViewFor<TestViewModel>
     {
-        /// <summary>
-        /// Gets or sets the view model.
-        /// </summary>
+        /// <summary>Gets or sets the view model.</summary>
         public TestViewModel? ViewModel { get; set; }
 
         /// <inheritdoc/>
@@ -632,35 +741,24 @@ public class ValidationBindingWpfTest
             set => ViewModel = value as TestViewModel;
         }
 
-        /// <summary>
-        /// Gets the text box used as a binding target.
-        /// </summary>
+        /// <summary>Gets the text box used as a binding target.</summary>
         public TextBox TestControl { get; } = new();
 
-        /// <summary>
-        /// Gets a control that always throws when accessed, used to test missing-control handling.
-        /// </summary>
-        [SuppressMessage("Performance", "CA1822:Mark members as static", Justification = "Instance property is required for expression tree usage")]
+        /// <summary>Gets a control that always throws when accessed, used to test missing-control handling.</summary>
         public TextBox NonExistentControl => throw new InvalidOperationException("This property should not be accessed");
     }
 
-    /// <summary>
-    /// A mock window-based view that hosts a named text box.
-    /// </summary>
+    /// <summary>A mock window-based view that hosts a named text box.</summary>
     private sealed class TestViewWithControl : Window, IViewFor<TestViewModel>
     {
-        /// <summary>
-        /// Initializes a new instance of the <see cref="TestViewWithControl"/> class.
-        /// </summary>
+        /// <summary>Initializes a new instance of the <see cref="TestViewWithControl"/> class.</summary>
         public TestViewWithControl()
         {
             MyTextBox = new TextBox { Name = "MyTextBox" };
             Content = MyTextBox;
         }
 
-        /// <summary>
-        /// Gets or sets the view model.
-        /// </summary>
+        /// <summary>Gets or sets the view model.</summary>
         public TestViewModel? ViewModel { get; set; }
 
         /// <inheritdoc/>
@@ -670,54 +768,95 @@ public class ValidationBindingWpfTest
             set => ViewModel = value as TestViewModel;
         }
 
-        /// <summary>
-        /// Gets the hosted text box.
-        /// </summary>
+        /// <summary>Gets the hosted text box.</summary>
         public TextBox MyTextBox { get; }
     }
 
-    /// <summary>
-    /// A mock view model used by the WPF validation binding tests.
-    /// </summary>
-    private sealed class TestViewModel : ReactiveObject
+    /// <summary>A user-control view whose visual tree can be realized to host a named text box.</summary>
+    private sealed class TestRealizedView : UserControl, IViewFor<TestViewModel>
     {
-        /// <summary>
-        /// Backing field for the <see cref="TestProperty"/> property.
-        /// </summary>
-        private string? _testProperty;
+        /// <summary>Identifies the <see cref="ViewModel"/> dependency property so it can be observed reactively.</summary>
+        private static readonly DependencyProperty ViewModelProperty =
+            DependencyProperty.Register(nameof(ViewModel), typeof(TestViewModel), typeof(TestRealizedView), new(null));
 
-        /// <summary>
-        /// Backing field for the <see cref="NestedObject"/> property.
-        /// </summary>
-        private NestedTestObject? _nestedObject;
-
-        /// <summary>
-        /// Gets or sets a sample property.
-        /// </summary>
-        public string? TestProperty
+        /// <summary>Initializes a new instance of the <see cref="TestRealizedView"/> class.</summary>
+        public TestRealizedView()
         {
-            get => _testProperty;
-            set => this.RaiseAndSetIfChanged(ref _testProperty, value);
+            MyTextBox = new TextBox { Name = "MyTextBox" };
+            Content = MyTextBox;
         }
 
-        /// <summary>
-        /// Gets or sets a nested object.
-        /// </summary>
+        /// <summary>Gets or sets the view model.</summary>
+        public TestViewModel? ViewModel
+        {
+            get => (TestViewModel?)GetValue(ViewModelProperty);
+            set => SetValue(ViewModelProperty, value);
+        }
+
+        /// <inheritdoc/>
+        object? IViewFor.ViewModel
+        {
+            get => ViewModel;
+            set => ViewModel = value as TestViewModel;
+        }
+
+        /// <summary>Gets the hosted text box.</summary>
+        public TextBox MyTextBox { get; }
+    }
+
+    /// <summary>A user-control view hosting a control whose target property is a plain CLR property, not a dependency property.</summary>
+    private sealed class TestViewWithPlainControl : UserControl, IViewFor<TestViewModel>
+    {
+        /// <summary>Initializes a new instance of the <see cref="TestViewWithPlainControl"/> class.</summary>
+        public TestViewWithPlainControl()
+        {
+            Holder = new PlainPropertyControl { Name = "Holder" };
+            Content = Holder;
+        }
+
+        /// <summary>Gets or sets the view model.</summary>
+        public TestViewModel? ViewModel { get; set; }
+
+        /// <inheritdoc/>
+        object? IViewFor.ViewModel
+        {
+            get => ViewModel;
+            set => ViewModel = value as TestViewModel;
+        }
+
+        /// <summary>Gets the hosted control exposing a non-dependency property.</summary>
+        public PlainPropertyControl Holder { get; }
+    }
+
+    /// <summary>A control exposing a plain CLR property that is not backed by a dependency property.</summary>
+    private sealed class PlainPropertyControl : Control
+    {
+        /// <summary>Gets or sets a plain CLR property with no dependency-property backing.</summary>
+        public string NotADependencyProperty { get; set; } = string.Empty;
+    }
+
+    /// <summary>A mock view model used by the WPF validation binding tests.</summary>
+    private sealed class TestViewModel : ReactiveObject
+    {
+        /// <summary>Gets or sets a sample property.</summary>
+        public string? TestProperty
+        {
+            get => field;
+            set => this.RaiseAndSetIfChanged(ref field, value);
+        }
+
+        /// <summary>Gets or sets a nested object.</summary>
         public NestedTestObject? NestedObject
         {
-            get => _nestedObject;
-            set => this.RaiseAndSetIfChanged(ref _nestedObject, value);
+            get => field;
+            set => this.RaiseAndSetIfChanged(ref field, value);
         }
     }
 
-    /// <summary>
-    /// A nested object used to test nested property validation bindings.
-    /// </summary>
+    /// <summary>A nested object used to test nested property validation bindings.</summary>
     private sealed class NestedTestObject
     {
-        /// <summary>
-        /// Gets or sets the name.
-        /// </summary>
+        /// <summary>Gets or sets the name.</summary>
         public string? Name { get; set; } = null!;
     }
 }

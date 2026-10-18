@@ -4,14 +4,15 @@
 // See the LICENSE file in the project root for full license information.
 
 using System.Diagnostics.CodeAnalysis;
-using System.Reactive;
-using System.Reactive.Concurrency;
-using System.Reactive.Disposables;
-using System.Reactive.Linq;
-using System.Reactive.Subjects;
 using System.Text.Json.Serialization.Metadata;
 using ReactiveUI.Tests.Utilities.SuspensionHost;
 using TUnit.Core.Executors;
+
+#if REACTIVE_SHIM
+using ISuspensionDriverContract = ReactiveUI.Reactive.ISuspensionDriver;
+#else
+using ISuspensionDriverContract = ReactiveUI.ISuspensionDriver;
+#endif
 
 namespace ReactiveUI.Tests;
 
@@ -23,9 +24,7 @@ namespace ReactiveUI.Tests;
 [TestExecutor<SuspensionHostTestExecutor>]
 public class SuspensionHostExtensionsTests
 {
-    /// <summary>
-    ///     Verifies that DummySuspensionDriver.InvalidateState returns a unit observable.
-    /// </summary>
+    /// <summary>Verifies that DummySuspensionDriver.InvalidateState returns a unit observable.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task DummySuspensionDriver_InvalidateState_ReturnsUnitObservable()
@@ -33,14 +32,12 @@ public class SuspensionHostExtensionsTests
         var driver = new DummySuspensionDriver();
         var wasCalled = false;
 
-        using var subscription = driver.InvalidateState().ObserveOn(ImmediateScheduler.Instance).Subscribe(_ => wasCalled = true);
+        using var subscription = driver.InvalidateState().ObserveOn(Sequencer.Immediate).Subscribe(_ => wasCalled = true);
 
         await Assert.That(wasCalled).IsTrue();
     }
 
-    /// <summary>
-    ///     Verifies that DummySuspensionDriver.LoadState returns a default observable.
-    /// </summary>
+    /// <summary>Verifies that DummySuspensionDriver.LoadState returns a default observable.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task DummySuspensionDriver_LoadState_ReturnsDefaultObservable()
@@ -48,14 +45,12 @@ public class SuspensionHostExtensionsTests
         var driver = new DummySuspensionDriver();
         object? result = null;
 
-        using var subscription = driver.LoadState().ObserveOn(ImmediateScheduler.Instance).Subscribe(state => result = state);
+        using var subscription = driver.LoadState().ObserveOn(Sequencer.Immediate).Subscribe(state => result = state);
 
         await Assert.That(result).IsNull();
     }
 
-    /// <summary>
-    ///     Verifies that DummySuspensionDriver.SaveState returns a unit observable.
-    /// </summary>
+    /// <summary>Verifies that DummySuspensionDriver.SaveState returns a unit observable.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task DummySuspensionDriver_SaveState_ReturnsUnitObservable()
@@ -63,25 +58,23 @@ public class SuspensionHostExtensionsTests
         var driver = new DummySuspensionDriver();
         var wasCalled = false;
 
-        using var subscription = driver.SaveState(new DummyAppState()).ObserveOn(ImmediateScheduler.Instance).Subscribe(_ => wasCalled = true);
+        using var subscription = driver.SaveState(new DummyAppState()).ObserveOn(Sequencer.Immediate).Subscribe(_ => wasCalled = true);
 
         await Assert.That(wasCalled).IsTrue();
     }
 
-    /// <summary>
-    ///     Verifies that EnsureLoadAppState with null driver after initially having one logs error and AppState remains null.
-    /// </summary>
+    /// <summary>Verifies that EnsureLoadAppState still loads through the setup driver after the locator loses its drivers.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
-    public async Task EnsureLoadAppState_DriverBecomesNull_LogsErrorAndAppStateRemainsNull()
+    public async Task EnsureLoadAppState_LocatorDriversRemovedAfterSetup_LoadsThroughSetupDriver()
     {
         using var host = new SuspensionHost
         {
-            CreateNewAppState = () => new DummyAppState(),
-            IsLaunchingNew = Observable.Never<Unit>(),
-            IsResuming = Observable.Never<Unit>(),
-            ShouldPersistState = Observable.Never<IDisposable>(),
-            ShouldInvalidateState = Observable.Never<Unit>()
+            CreateNewAppState = static () => new DummyAppState(),
+            IsLaunchingNew = Signal.Silent<RxVoid>(),
+            IsResuming = Signal.Silent<RxVoid>(),
+            ShouldPersistState = Signal.Silent<IDisposable>(),
+            ShouldInvalidateState = Signal.Silent<RxVoid>(),
         };
 
         var driver = new TestSuspensionDriver { StateToLoad = new DummyAppState() };
@@ -89,19 +82,14 @@ public class SuspensionHostExtensionsTests
         // Set up with a driver
         using var disposable = host.SetupDefaultSuspendResume(driver);
 
-        // Clear both the static driver AND service locator to force the null branch in EnsureLoadAppState
         var previousDrivers = Splat.Locator.Current.GetServices<ISuspensionDriver>().ToList();
         Splat.Locator.CurrentMutable.UnregisterAll<ISuspensionDriver>();
         try
         {
-            SuspensionHostExtensions.SuspensionDriver = null;
-
-            // Now call GetAppState which should trigger EnsureLoadAppState
-            // It should hit the null driver branch and log error, leaving AppState null
             var state = host.GetAppState<DummyAppState>();
 
-            // State should be null since driver became null and couldn't load
-            await Assert.That(state).IsNull();
+            await Assert.That(state).IsSameReferenceAs(driver.StateToLoad);
+            await Assert.That(driver.LoadStateCallCount).IsEqualTo(1);
         }
         finally
         {
@@ -112,20 +100,18 @@ public class SuspensionHostExtensionsTests
         }
     }
 
-    /// <summary>
-    ///     Verifies that EnsureLoadAppState creates a new app state when LoadState throws.
-    /// </summary>
+    /// <summary>Verifies that EnsureLoadAppState creates a new app state when LoadState throws.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task EnsureLoadAppState_LoadStateThrows_CreatesNewAppState()
     {
         using var host = new SuspensionHost
         {
-            CreateNewAppState = () => new DummyAppState(),
-            IsLaunchingNew = Observable.Never<Unit>(),
-            IsResuming = Observable.Never<Unit>(),
-            ShouldPersistState = Observable.Never<IDisposable>(),
-            ShouldInvalidateState = Observable.Never<Unit>()
+            CreateNewAppState = static () => new DummyAppState(),
+            IsLaunchingNew = Signal.Silent<RxVoid>(),
+            IsResuming = Signal.Silent<RxVoid>(),
+            ShouldPersistState = Signal.Silent<IDisposable>(),
+            ShouldInvalidateState = Signal.Silent<RxVoid>(),
         };
 
         var driver = new TestSuspensionDriver { ShouldThrowOnLoad = true };
@@ -138,9 +124,7 @@ public class SuspensionHostExtensionsTests
         await Assert.That(driver.LoadStateCallCount).IsEqualTo(1);
     }
 
-    /// <summary>
-    ///     Verifies that EnsureLoadAppState does not load when an app state already exists.
-    /// </summary>
+    /// <summary>Verifies that EnsureLoadAppState does not load when an app state already exists.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task EnsureLoadAppState_WithExistingAppState_DoesNotLoad()
@@ -149,10 +133,10 @@ public class SuspensionHostExtensionsTests
         using var host = new SuspensionHost
         {
             AppState = existingState,
-            IsLaunchingNew = Observable.Never<Unit>(),
-            IsResuming = Observable.Never<Unit>(),
-            ShouldPersistState = Observable.Never<IDisposable>(),
-            ShouldInvalidateState = Observable.Never<Unit>()
+            IsLaunchingNew = Signal.Silent<RxVoid>(),
+            IsResuming = Signal.Silent<RxVoid>(),
+            ShouldPersistState = Signal.Silent<IDisposable>(),
+            ShouldInvalidateState = Signal.Silent<RxVoid>(),
         };
 
         var driver = new TestSuspensionDriver();
@@ -165,9 +149,7 @@ public class SuspensionHostExtensionsTests
         await Assert.That(state).IsSameReferenceAs(existingState);
     }
 
-    /// <summary>
-    ///     Verifies that EnsureLoadAppState sets the app state to null when CreateNewAppState is null and load fails.
-    /// </summary>
+    /// <summary>Verifies that EnsureLoadAppState sets the app state to null when CreateNewAppState is null and load fails.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task EnsureLoadAppState_WithNullCreateNewAppState_SetsAppStateToNull()
@@ -175,10 +157,10 @@ public class SuspensionHostExtensionsTests
         using var host = new SuspensionHost
         {
             CreateNewAppState = null,
-            IsLaunchingNew = Observable.Never<Unit>(),
-            IsResuming = Observable.Never<Unit>(),
-            ShouldPersistState = Observable.Never<IDisposable>(),
-            ShouldInvalidateState = Observable.Never<Unit>()
+            IsLaunchingNew = Signal.Silent<RxVoid>(),
+            IsResuming = Signal.Silent<RxVoid>(),
+            ShouldPersistState = Signal.Silent<IDisposable>(),
+            ShouldInvalidateState = Signal.Silent<RxVoid>(),
         };
 
         var driver = new TestSuspensionDriver { ShouldThrowOnLoad = true };
@@ -190,20 +172,18 @@ public class SuspensionHostExtensionsTests
         await Assert.That(state).IsNull();
     }
 
-    /// <summary>
-    ///     Verifies that GetAppState only triggers a state load once.
-    /// </summary>
+    /// <summary>Verifies that GetAppState only triggers a state load once.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task GetAppState_OnlyLoadsOnce()
     {
         using var host = new SuspensionHost
         {
-            CreateNewAppState = () => new DummyAppState(),
-            IsLaunchingNew = Observable.Never<Unit>(),
-            IsResuming = Observable.Never<Unit>(),
-            ShouldPersistState = Observable.Never<IDisposable>(),
-            ShouldInvalidateState = Observable.Never<Unit>()
+            CreateNewAppState = static () => new DummyAppState(),
+            IsLaunchingNew = Signal.Silent<RxVoid>(),
+            IsResuming = Signal.Silent<RxVoid>(),
+            ShouldPersistState = Signal.Silent<IDisposable>(),
+            ShouldInvalidateState = Signal.Silent<RxVoid>(),
         };
 
         var driver = new TestSuspensionDriver { StateToLoad = new DummyAppState() };
@@ -217,20 +197,18 @@ public class SuspensionHostExtensionsTests
         await Assert.That(state1).IsSameReferenceAs(state2);
     }
 
-    /// <summary>
-    ///     Verifies that GetAppState triggers a state load on the first call.
-    /// </summary>
+    /// <summary>Verifies that GetAppState triggers a state load on the first call.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task GetAppState_TriggersLoadOnFirstCall()
     {
         using var host = new SuspensionHost
         {
-            CreateNewAppState = () => new DummyAppState(),
-            IsLaunchingNew = Observable.Never<Unit>(),
-            IsResuming = Observable.Never<Unit>(),
-            ShouldPersistState = Observable.Never<IDisposable>(),
-            ShouldInvalidateState = Observable.Never<Unit>()
+            CreateNewAppState = static () => new DummyAppState(),
+            IsLaunchingNew = Signal.Silent<RxVoid>(),
+            IsResuming = Signal.Silent<RxVoid>(),
+            ShouldPersistState = Signal.Silent<IDisposable>(),
+            ShouldInvalidateState = Signal.Silent<RxVoid>(),
         };
 
         var driver = new TestSuspensionDriver { StateToLoad = new DummyAppState() };
@@ -243,9 +221,7 @@ public class SuspensionHostExtensionsTests
         await Assert.That(driver.LoadStateCallCount).IsEqualTo(1);
     }
 
-    /// <summary>
-    ///     Verifies that GetAppState correctly retrieves the current app state.
-    /// </summary>
+    /// <summary>Verifies that GetAppState correctly retrieves the current app state.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task GetAppStateReturns()
@@ -257,17 +233,13 @@ public class SuspensionHostExtensionsTests
         await Assert.That(result).IsSameReferenceAs(fixture.AppState);
     }
 
-    /// <summary>
-    ///     Verifies that GetAppState throws for null ISuspensionHost.
-    /// </summary>
+    /// <summary>Verifies that GetAppState throws for null ISuspensionHost.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task GetAppStateThrowsForNullHost() => await Assert
-        .That(() => ((ISuspensionHost)null!).GetAppState<DummyAppState>()).Throws<ArgumentNullException>();
+        .That(static () => ((ISuspensionHost)null!).GetAppState<DummyAppState>()).Throws<ArgumentNullException>();
 
-    /// <summary>
-    ///     Verifies that a null AppState does not throw when calling SetupDefaultSuspendResume.
-    /// </summary>
+    /// <summary>Verifies that a null AppState does not throw when calling SetupDefaultSuspendResume.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task NullAppStateDoesNotThrowException()
@@ -277,18 +249,13 @@ public class SuspensionHostExtensionsTests
         await Assert.That(() => fixture.SetupDefaultSuspendResume()).ThrowsNothing();
     }
 
-    /// <summary>
-    ///     Verifies that a null <see cref="SuspensionHost" /> throws <see cref="ArgumentNullException" /> when calling
-    ///     SetupDefaultSuspendResume.
-    /// </summary>
+    /// <summary>Verifies that a null <see cref="SuspensionHost" /> throws <see cref="ArgumentNullException" /> when calling SetupDefaultSuspendResume.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task NullSuspensionHostThrowsException() => await Assert
         .That(static () => ((SuspensionHost)null!).SetupDefaultSuspendResume()).Throws<ArgumentNullException>();
 
-    /// <summary>
-    ///     Verifies that observing AppState does not throw.
-    /// </summary>
+    /// <summary>Verifies that observing AppState does not throw.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task ObserveAppStateDoesNotThrowException()
@@ -298,25 +265,7 @@ public class SuspensionHostExtensionsTests
         await Assert.That(() => fixture.ObserveAppState<DummyAppState>().Subscribe()).ThrowsNothing();
     }
 
-    /// <summary>
-    ///     Verifies that observing AppState does not throw <see cref="InvalidCastException" />.
-    /// </summary>
-    /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
-    [Test]
-    [SuppressMessage(
-        "Major Code Smell",
-        "S4144:Methods should not have identical implementations",
-        Justification = "Intentional duplicate test scenario.")]
-    public async Task ObserveAppStateDoesNotThrowInvalidCastException()
-    {
-        var fixture = new SuspensionHost();
-
-        await Assert.That(() => fixture.ObserveAppState<DummyAppState>().Subscribe()).ThrowsNothing();
-    }
-
-    /// <summary>
-    ///     Verifies that ObserveAppState emits values when AppState changes.
-    /// </summary>
+    /// <summary>Verifies that ObserveAppState emits values when AppState changes.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task ObserveAppStateEmitsValues()
@@ -324,7 +273,7 @@ public class SuspensionHostExtensionsTests
         using var fixture = new SuspensionHost();
         var receivedStates = new List<DummyAppState>();
 
-        using var subscription = fixture.ObserveAppState<DummyAppState>().ObserveOn(ImmediateScheduler.Instance).Subscribe(receivedStates.Add);
+        using var subscription = fixture.ObserveAppState<DummyAppState>().ObserveOn(Sequencer.Immediate).Subscribe(receivedStates.Add);
 
         var state1 = new DummyAppState();
         fixture.AppState = state1;
@@ -338,9 +287,7 @@ public class SuspensionHostExtensionsTests
         await Assert.That(receivedStates[1]).IsSameReferenceAs(state2);
     }
 
-    /// <summary>
-    ///     Verifies that ObserveAppState filters null values.
-    /// </summary>
+    /// <summary>Verifies that ObserveAppState filters null values.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task ObserveAppStateFiltersNullValues()
@@ -348,7 +295,7 @@ public class SuspensionHostExtensionsTests
         using var fixture = new SuspensionHost();
         var receivedStates = new List<DummyAppState>();
 
-        using var subscription = fixture.ObserveAppState<DummyAppState>().ObserveOn(ImmediateScheduler.Instance).Subscribe(receivedStates.Add);
+        using var subscription = fixture.ObserveAppState<DummyAppState>().ObserveOn(Sequencer.Immediate).Subscribe(receivedStates.Add);
 
         fixture.AppState = null;
         var state = new DummyAppState();
@@ -359,109 +306,87 @@ public class SuspensionHostExtensionsTests
         await Assert.That(receivedStates[0]).IsSameReferenceAs(state);
     }
 
-    /// <summary>
-    ///     Verifies that ObserveAppState throws for null ISuspensionHost.
-    /// </summary>
+    /// <summary>Verifies that ObserveAppState throws for null ISuspensionHost.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task ObserveAppStateThrowsForNullHost() => await Assert
-        .That(() => ((ISuspensionHost)null!).ObserveAppState<DummyAppState>()).Throws<ArgumentNullException>();
+        .That(static () => ((ISuspensionHost)null!).ObserveAppState<DummyAppState>()).Throws<ArgumentNullException>();
 
-    /// <summary>
-    ///     Verifies that SetupDefaultSuspendResume triggers a state load when launching new or resuming.
-    /// </summary>
+    /// <summary>Verifies that SetupDefaultSuspendResume triggers a state load when launching new or resuming.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task SetupDefaultSuspendResume_IsResumingOrIsLaunchingNew_TriggersStateLoad()
     {
         using var host = new SuspensionHost
         {
-            CreateNewAppState = () => new DummyAppState(),
-            ShouldPersistState = Observable.Never<IDisposable>(),
-            ShouldInvalidateState = Observable.Never<Unit>()
+            CreateNewAppState = static () => new DummyAppState(),
+            ShouldPersistState = Signal.Silent<IDisposable>(),
+            ShouldInvalidateState = Signal.Silent<RxVoid>(),
         };
 
         var driver = new TestSuspensionDriver();
-        var launchSubject = new Subject<Unit>();
-        var resumeSubject = new Subject<Unit>();
+        var launchSubject = new Signal<RxVoid>();
+        var resumeSubject = new Signal<RxVoid>();
 
-        host.IsLaunchingNew = launchSubject.ObserveOn(ImmediateScheduler.Instance);
-        host.IsResuming = resumeSubject.ObserveOn(ImmediateScheduler.Instance);
+        host.IsLaunchingNew = launchSubject.ObserveOn(Sequencer.Immediate);
+        host.IsResuming = resumeSubject.ObserveOn(Sequencer.Immediate);
 
         using var disposable = host.SetupDefaultSuspendResume(driver);
 
-        launchSubject.OnNext(Unit.Default);
+        launchSubject.OnNext(RxVoid.Default);
 
         await Assert.That(host.AppState).IsNotNull();
     }
 
-    /// <summary>
-    ///     Verifies that SetupDefaultSuspendResume calls the driver's InvalidateState when state should be invalidated.
-    /// </summary>
+    /// <summary>Verifies that SetupDefaultSuspendResume calls the driver's InvalidateState when state should be invalidated.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task SetupDefaultSuspendResume_ShouldInvalidateState_CallsDriverInvalidateState()
     {
-        using var host = new SuspensionHost
-        {
-            IsLaunchingNew = Observable.Never<Unit>(),
-            IsResuming = Observable.Never<Unit>(),
-            ShouldPersistState = Observable.Never<IDisposable>()
-        };
+        using var host = new SuspensionHost { IsLaunchingNew = Signal.Silent<RxVoid>(), IsResuming = Signal.Silent<RxVoid>(), ShouldPersistState = Signal.Silent<IDisposable>() };
 
         var driver = new TestSuspensionDriver();
-        var invalidateSubject = new Subject<Unit>();
-        host.ShouldInvalidateState = invalidateSubject.ObserveOn(ImmediateScheduler.Instance);
+        var invalidateSubject = new Signal<RxVoid>();
+        host.ShouldInvalidateState = invalidateSubject.ObserveOn(Sequencer.Immediate);
 
         using var disposable = host.SetupDefaultSuspendResume(driver);
 
-        invalidateSubject.OnNext(Unit.Default);
+        invalidateSubject.OnNext(RxVoid.Default);
 
         await Assert.That(driver.InvalidateStateCallCount).IsEqualTo(1);
     }
 
-    /// <summary>
-    ///     Verifies that SetupDefaultSuspendResume calls the driver's SaveState when state should be persisted.
-    /// </summary>
+    /// <summary>Verifies that SetupDefaultSuspendResume calls the driver's SaveState when state should be persisted.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task SetupDefaultSuspendResume_ShouldPersistState_CallsDriverSaveState()
     {
         var appState = new DummyAppState();
-        using var host = new SuspensionHost
-        {
-            AppState = appState,
-            IsLaunchingNew = Observable.Never<Unit>(),
-            IsResuming = Observable.Never<Unit>(),
-            ShouldInvalidateState = Observable.Never<Unit>()
-        };
+        using var host = new SuspensionHost { AppState = appState, IsLaunchingNew = Signal.Silent<RxVoid>(), IsResuming = Signal.Silent<RxVoid>(), ShouldInvalidateState = Signal.Silent<RxVoid>() };
 
         var driver = new TestSuspensionDriver();
-        var persistSubject = new Subject<IDisposable>();
-        host.ShouldPersistState = persistSubject.ObserveOn(ImmediateScheduler.Instance);
+        var persistSubject = new Signal<IDisposable>();
+        host.ShouldPersistState = persistSubject.ObserveOn(Sequencer.Immediate);
 
         using var disposable = host.SetupDefaultSuspendResume(driver);
 
-        var token = Disposable.Empty;
-        persistSubject.OnNext(token);
+        persistSubject.OnNext(Scope.Empty);
 
         await Assert.That(driver.SaveStateCallCount).IsEqualTo(1);
         await Assert.That(driver.LastSavedState).IsSameReferenceAs(appState);
     }
 
-    /// <summary>
-    ///     Verifies that SetupDefaultSuspendResume logs an error when no driver is available.
-    /// </summary>
+    /// <summary>Verifies that SetupDefaultSuspendResume logs an error when no driver is available.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task SetupDefaultSuspendResume_WithNullDriver_LogsError()
     {
         using var host = new SuspensionHost
         {
-            IsLaunchingNew = Observable.Never<Unit>(),
-            IsResuming = Observable.Never<Unit>(),
-            ShouldPersistState = Observable.Never<IDisposable>(),
-            ShouldInvalidateState = Observable.Never<Unit>()
+            IsLaunchingNew = Signal.Silent<RxVoid>(),
+            IsResuming = Signal.Silent<RxVoid>(),
+            ShouldPersistState = Signal.Silent<IDisposable>(),
+            ShouldInvalidateState = Signal.Silent<RxVoid>(),
         };
 
         var previousDrivers = Splat.Locator.Current.GetServices<ISuspensionDriver>().ToList();
@@ -483,20 +408,18 @@ public class SuspensionHostExtensionsTests
         }
     }
 
-    /// <summary>
-    ///     Verifies that SetupDefaultSuspendResume uses an explicitly provided driver.
-    /// </summary>
+    /// <summary>Verifies that SetupDefaultSuspendResume uses an explicitly provided driver.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task SetupDefaultSuspendResume_WithProvidedDriver_UsesProvidedDriver()
     {
         using var host = new SuspensionHost
         {
-            IsLaunchingNew = Observable.Never<Unit>(),
-            IsResuming = Observable.Never<Unit>(),
-            ShouldPersistState = Observable.Never<IDisposable>(),
-            ShouldInvalidateState = Observable.Never<Unit>(),
-            CreateNewAppState = () => new DummyAppState()
+            IsLaunchingNew = Signal.Silent<RxVoid>(),
+            IsResuming = Signal.Silent<RxVoid>(),
+            ShouldPersistState = Signal.Silent<IDisposable>(),
+            ShouldInvalidateState = Signal.Silent<RxVoid>(),
+            CreateNewAppState = static () => new DummyAppState(),
         };
 
         var driver = new TestSuspensionDriver { StateToLoad = new DummyAppState() };
@@ -506,55 +429,82 @@ public class SuspensionHostExtensionsTests
         await Assert.That(disposable).IsNotNull();
     }
 
-    /// <summary>
-    ///     A dummy application state used for testing.
-    /// </summary>
+    /// <summary>Verifies that two hosts set up with different drivers each load and save through their own driver.</summary>
+    /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
+    [Test]
+    public async Task SetupDefaultSuspendResume_TwoHostsWithDifferentDrivers_EachHostUsesItsOwnDriver()
+    {
+        var firstPersist = new Signal<IDisposable>();
+        using var firstHost = new SuspensionHost
+        {
+            IsLaunchingNew = Signal.Silent<RxVoid>(),
+            IsResuming = Signal.Silent<RxVoid>(),
+            ShouldInvalidateState = Signal.Silent<RxVoid>(),
+            ShouldPersistState = firstPersist.ObserveOn(Sequencer.Immediate),
+        };
+        var secondPersist = new Signal<IDisposable>();
+        using var secondHost = new SuspensionHost
+        {
+            IsLaunchingNew = Signal.Silent<RxVoid>(),
+            IsResuming = Signal.Silent<RxVoid>(),
+            ShouldInvalidateState = Signal.Silent<RxVoid>(),
+            ShouldPersistState = secondPersist.ObserveOn(Sequencer.Immediate),
+        };
+
+        var firstDriver = new TestSuspensionDriver { StateToLoad = new DummyAppState() };
+        var secondDriver = new TestSuspensionDriver { StateToLoad = new DummyAppState() };
+
+        using var firstSetup = firstHost.SetupDefaultSuspendResume(firstDriver);
+        using var secondSetup = secondHost.SetupDefaultSuspendResume(secondDriver);
+
+        var firstState = firstHost.GetAppState<DummyAppState>();
+        var secondState = secondHost.GetAppState<DummyAppState>();
+        firstPersist.OnNext(Scope.Empty);
+        secondPersist.OnNext(Scope.Empty);
+
+        await Assert.That(firstState).IsSameReferenceAs(firstDriver.StateToLoad);
+        await Assert.That(secondState).IsSameReferenceAs(secondDriver.StateToLoad);
+        await Assert.That(firstDriver.LoadStateCallCount).IsEqualTo(1);
+        await Assert.That(secondDriver.LoadStateCallCount).IsEqualTo(1);
+        await Assert.That(firstDriver.SaveStateCallCount).IsEqualTo(1);
+        await Assert.That(secondDriver.SaveStateCallCount).IsEqualTo(1);
+        await Assert.That(firstDriver.LastSavedState).IsSameReferenceAs(firstDriver.StateToLoad);
+        await Assert.That(secondDriver.LastSavedState).IsSameReferenceAs(secondDriver.StateToLoad);
+    }
+
+    /// <summary>A dummy application state used for testing.</summary>
     [SuppressMessage(
         "Minor Code Smell",
-        "S2094:Classes should not be empty",
+        "SST1436:Classes should not be empty",
         Justification = "Empty type used as a test marker.")]
     private sealed class DummyAppState;
 
-    /// <summary>
-    ///     A test suspension driver that records calls and returns configurable results.
-    /// </summary>
-    private sealed class TestSuspensionDriver : ISuspensionDriver
+    /// <summary>A test suspension driver that records calls and returns configurable results.</summary>
+    private sealed class TestSuspensionDriver : ISuspensionDriverContract
     {
-        /// <summary>
-        ///     Gets the number of times InvalidateState was called.
-        /// </summary>
+        /// <summary>Gets the number of times InvalidateState was called.</summary>
         public int InvalidateStateCallCount { get; private set; }
 
-        /// <summary>
-        ///     Gets the last state passed to SaveState.
-        /// </summary>
+        /// <summary>Gets the last state passed to SaveState.</summary>
         public object? LastSavedState { get; private set; }
 
-        /// <summary>
-        ///     Gets the number of times LoadState was called.
-        /// </summary>
+        /// <summary>Gets the number of times LoadState was called.</summary>
         public int LoadStateCallCount { get; private set; }
 
-        /// <summary>
-        ///     Gets the number of times SaveState was called.
-        /// </summary>
+        /// <summary>Gets the number of times SaveState was called.</summary>
         public int SaveStateCallCount { get; private set; }
 
-        /// <summary>
-        ///     Gets or sets a value indicating whether LoadState should throw.
-        /// </summary>
+        /// <summary>Gets or sets a value indicating whether LoadState should throw.</summary>
         public bool ShouldThrowOnLoad { get; set; }
 
-        /// <summary>
-        ///     Gets or sets the state to return from LoadState.
-        /// </summary>
+        /// <summary>Gets or sets the state to return from LoadState.</summary>
         public object? StateToLoad { get; set; }
 
         /// <inheritdoc/>
-        public IObservable<Unit> InvalidateState()
+        public IObservable<RxVoid> InvalidateState()
         {
             InvalidateStateCallCount++;
-            return Observable.Return(Unit.Default, ImmediateScheduler.Instance);
+            return Signal.Emit(RxVoid.Default, Sequencer.Immediate);
         }
 
         /// <inheritdoc/>
@@ -565,14 +515,9 @@ public class SuspensionHostExtensionsTests
         public IObservable<object?> LoadState()
         {
             LoadStateCallCount++;
-            if (ShouldThrowOnLoad)
-            {
-                return Observable.Throw<object?>(
+            return ShouldThrowOnLoad ? Signal.Fail<object?>(
                     new InvalidOperationException("Failed to load state"),
-                    ImmediateScheduler.Instance);
-            }
-
-            return Observable.Return(StateToLoad ?? new DummyAppState(), ImmediateScheduler.Instance);
+                    Sequencer.Immediate) : Signal.Emit(StateToLoad ?? new DummyAppState(), Sequencer.Immediate);
         }
 
         /// <inheritdoc/>
@@ -581,18 +526,13 @@ public class SuspensionHostExtensionsTests
             LoadStateCallCount++;
             if (ShouldThrowOnLoad)
             {
-                return Observable.Throw<T?>(
+                return Signal.Fail<T?>(
                     new InvalidOperationException("Failed to load state"),
-                    ImmediateScheduler.Instance);
+                    Sequencer.Immediate);
             }
 
             // For test purposes, try to cast StateToLoad to T
-            if (StateToLoad is T typedState)
-            {
-                return Observable.Return(typedState, ImmediateScheduler.Instance);
-            }
-
-            return Observable.Return<T?>(default, ImmediateScheduler.Instance);
+            return StateToLoad is T typedState ? Signal.Emit(typedState, Sequencer.Immediate) : Signal.Emit<T?>(default, Sequencer.Immediate);
         }
 
         /// <inheritdoc/>
@@ -600,19 +540,24 @@ public class SuspensionHostExtensionsTests
             "Implementations commonly use reflection-based serialization. Prefer SaveState<T>(T, JsonTypeInfo<T>) for trimming or AOT scenarios.")]
         [RequiresDynamicCode(
             "Implementations commonly use reflection-based serialization. Prefer SaveState<T>(T, JsonTypeInfo<T>) for trimming or AOT scenarios.")]
-        public IObservable<Unit> SaveState<T>(T state)
-        {
-            SaveStateCallCount++;
-            LastSavedState = state;
-            return Observable.Return(Unit.Default, ImmediateScheduler.Instance);
-        }
+        public IObservable<RxVoid> SaveState<T>(T state) => SaveStateCore(state);
 
         /// <inheritdoc/>
-        public IObservable<Unit> SaveState<T>(T state, JsonTypeInfo<T> typeInfo)
+        public IObservable<RxVoid> SaveState<T>(T state, JsonTypeInfo<T> typeInfo)
+        {
+            _ = typeInfo;
+            return SaveStateCore(state);
+        }
+
+        /// <summary>Records and completes a save request.</summary>
+        /// <typeparam name="T">The state type.</typeparam>
+        /// <param name="state">The state to save.</param>
+        /// <returns>A completion signal.</returns>
+        private IObservable<RxVoid> SaveStateCore<T>(T state)
         {
             SaveStateCallCount++;
             LastSavedState = state;
-            return Observable.Return(Unit.Default, ImmediateScheduler.Instance);
+            return Signal.Emit(RxVoid.Default, Sequencer.Immediate);
         }
     }
 }

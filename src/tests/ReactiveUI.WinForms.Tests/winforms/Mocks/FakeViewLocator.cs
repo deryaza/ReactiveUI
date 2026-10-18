@@ -7,57 +7,49 @@ using System.Diagnostics.CodeAnalysis;
 
 namespace ReactiveUI.WinForms.Tests.Winforms.Mocks;
 
-/// <summary>
-/// A fake view locator that resolves views using a configurable delegate.
-/// </summary>
-[System.Diagnostics.CodeAnalysis.SuppressMessage(
-    "Major Code Smell",
-    "S4018:Generic methods should provide type parameters",
-    Justification = "IViewLocator declares parameterless generic ResolveView overloads that this mock must implement.")]
+/// <summary>A fake view locator that resolves views using a configurable delegate.</summary>
 internal sealed class FakeViewLocator : IViewLocator
 {
-    /// <summary>
-    /// Gets or sets the delegate used to resolve a view from a view model type.
-    /// </summary>
-    public Func<Type, IViewFor>? LocatorFunc { get; set; }
+    /// <summary>Gets or sets the delegate used to resolve a view from a view model type.</summary>
+    internal Func<Type, IViewFor>? LocatorFunc { get; set; }
+
+    /// <summary>Gets the number of ahead-of-time safe lookups by run-time type.</summary>
+    internal int SafeLookups { get; private set; }
+
+    /// <summary>Gets the number of reflective lookups by run-time type.</summary>
+    internal int UnsafeLookups { get; private set; }
 
     /// <inheritdoc/>
-    public IViewFor<TViewModel>? ResolveView<TViewModel>(string? contract)
-        where TViewModel : class =>
-        LocatorFunc?.Invoke(typeof(TViewModel)) as IViewFor<TViewModel>;
+    public IViewFor? ResolveView<TViewModel>(TViewModel viewModel, string? contract)
+        where TViewModel : class => Resolve(viewModel, typeof(TViewModel));
 
     /// <inheritdoc/>
-    public IViewFor<TViewModel>? ResolveView<TViewModel>()
-        where TViewModel : class =>
-        ResolveView<TViewModel>(null);
-
-    /// <inheritdoc/>
-    [RequiresUnreferencedCode(
-        "This method uses reflection to determine the view model type at runtime, which may be incompatible with trimming.")]
-    [RequiresDynamicCode(
-        "If some of the generic arguments are annotated (either with DynamicallyAccessedMembersAttribute, " +
-        "or generic constraints), trimming can't validate that the requirements of those annotations are met.")]
-    public IViewFor? ResolveView(object? instance, string? contract)
+    public IViewFor? ResolveView(object? viewModel, string? contract)
     {
-        if (instance is null)
-        {
-            return null;
-        }
+        SafeLookups++;
+        return viewModel is null ? null : Resolve(viewModel, viewModel.GetType());
+    }
 
-        var view = LocatorFunc?.Invoke(instance.GetType());
-        if (view is IViewFor viewFor)
+    /// <inheritdoc/>
+    [RequiresDynamicCode("Resolves a view from the view model's runtime type.")]
+    public IViewFor? ResolveViewUnsafe(object? viewModel, string? contract)
+    {
+        UnsafeLookups++;
+        return viewModel is null ? null : Resolve(viewModel, viewModel.GetType());
+    }
+
+    /// <summary>Resolves a view for the view model type and hands it the view model.</summary>
+    /// <param name="viewModel">The view model the view displays.</param>
+    /// <param name="viewModelType">The view model type to look the view up by.</param>
+    /// <returns>The view, or <see langword="null"/> when none is configured.</returns>
+    private IViewFor? Resolve(object viewModel, Type viewModelType)
+    {
+        var view = LocatorFunc?.Invoke(viewModelType);
+        if (view is not null)
         {
-            viewFor.ViewModel = instance;
+            view.ViewModel = viewModel;
         }
 
         return view;
     }
-
-    /// <inheritdoc/>
-    [RequiresUnreferencedCode(
-        "This method uses reflection to determine the view model type at runtime, which may be incompatible with trimming.")]
-    [RequiresDynamicCode(
-        "If some of the generic arguments are annotated (either with DynamicallyAccessedMembersAttribute, " +
-        "or generic constraints), trimming can't validate that the requirements of those annotations are met.")]
-    public IViewFor? ResolveView(object? instance) => ResolveView(instance, null);
 }

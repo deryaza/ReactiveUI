@@ -5,6 +5,7 @@
     <OutputType>Exe</OutputType>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <IsTestProject>true</IsTestProject>
     <IsPackable>false</IsPackable>
   </PropertyGroup>
 
@@ -13,11 +14,16 @@
     <ProjectReference Include="..\ReactiveUI.Test.Utilities\ReactiveUI.Test.Utilities.csproj"/>
   </ItemGroup>
   <ItemGroup>
+    <Using Include="ReactiveUI.Primitives" />
+    <Using Include="ReactiveUI.Primitives.Advanced" />
+    <Using Include="ReactiveUI.Primitives.Signals" />
+  </ItemGroup>
+  <ItemGroup>
     <Compile Remove="RandomTests.cs"/>
     <Compile Remove="Platforms\**\*.cs"/>
     <None Include="Platforms\**\*.cs"/>
   </ItemGroup>
-  <ItemGroup Condition="$(TargetFramework.EndsWith('net8.0')) or $(TargetFramework.EndsWith('net9.0')) or $(TargetFramework.EndsWith('net8.0'))">
+  <ItemGroup Condition="$(TargetFramework.StartsWith('net8.0')) or $(TargetFramework.StartsWith('net9.0')) or $(TargetFramework.StartsWith('net10.0')) or $(TargetFramework.StartsWith('net11.0'))">
     <Compile Include="Platforms\Blazor\**\*.cs"/>
     <ProjectReference Include="..\..\ReactiveUI.Blazor\ReactiveUI.Blazor.csproj"/>
   </ItemGroup>

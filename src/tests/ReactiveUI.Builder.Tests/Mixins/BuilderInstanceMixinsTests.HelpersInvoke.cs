@@ -5,14 +5,14 @@
 
 namespace ReactiveUI.Builder.Tests.Mixins;
 
-/// <content>
-/// Shared helpers that invoke the higher-arity WithInstance overloads and capture the resolved instances.
-/// </content>
+/// <summary>Shared helpers that invoke the higher-arity WithInstance overloads and capture the resolved instances.</summary>
+[System.Diagnostics.CodeAnalysis.SuppressMessage(
+    "Layout",
+    "SST1523:Members should not be too long",
+    Justification = "High-arity variadic WithInstance helper methods are intrinsically long; each out-parameter and assignment sits on its own line under one-statement-per-line formatting.")]
 public partial class BuilderInstanceMixinsTests
 {
-    /// <summary>
-    /// Invokes the nine-type WithInstance overload and captures the resolved instances.
-    /// </summary>
+    /// <summary>Invokes the nine-type WithInstance overload and captures the resolved instances.</summary>
     /// <param name="builder">The builder to invoke the overload on.</param>
     /// <param name="captured1">Receives the resolved instance 1.</param>
     /// <param name="captured2">Receives the resolved instance 2.</param>
@@ -25,7 +25,7 @@ public partial class BuilderInstanceMixinsTests
     /// <param name="captured9">Receives the resolved instance 9.</param>
     [System.Diagnostics.CodeAnalysis.SuppressMessage(
         "Major Code Smell",
-        "S107:Methods should not have too many parameters",
+        "SST1472:Signatures should not declare too many parameters",
         Justification = "Test exercises a variadic overload.")]
     private static void InvokeWithInstance09(
         ReactiveUIBuilder builder,
@@ -48,7 +48,7 @@ public partial class BuilderInstanceMixinsTests
         InstanceService07? c7 = null;
         InstanceService08? c8 = null;
         InstanceService09? c9 = null;
-        builder
+        _ = builder
             .WithInstance<
                 InstanceService01,
                 InstanceService02,
@@ -81,9 +81,7 @@ public partial class BuilderInstanceMixinsTests
         captured9 = c9;
     }
 
-    /// <summary>
-    /// Invokes the ten-type WithInstance overload and captures the resolved instances.
-    /// </summary>
+    /// <summary>Invokes the ten-type WithInstance overload and captures the resolved instances.</summary>
     /// <param name="builder">The builder to invoke the overload on.</param>
     /// <param name="captured1">Receives the resolved instance 1.</param>
     /// <param name="captured2">Receives the resolved instance 2.</param>
@@ -97,7 +95,7 @@ public partial class BuilderInstanceMixinsTests
     /// <param name="captured10">Receives the resolved instance 10.</param>
     [System.Diagnostics.CodeAnalysis.SuppressMessage(
         "Major Code Smell",
-        "S107:Methods should not have too many parameters",
+        "SST1472:Signatures should not declare too many parameters",
         Justification = "Test exercises a variadic overload.")]
     private static void InvokeWithInstance10(
         ReactiveUIBuilder builder,
@@ -122,7 +120,7 @@ public partial class BuilderInstanceMixinsTests
         InstanceService08? c8 = null;
         InstanceService09? c9 = null;
         InstanceService10? c10 = null;
-        builder
+        _ = builder
             .WithInstance<
                 InstanceService01,
                 InstanceService02,
@@ -158,9 +156,7 @@ public partial class BuilderInstanceMixinsTests
         captured10 = c10;
     }
 
-    /// <summary>
-    /// Invokes the eleven-type WithInstance overload and captures the resolved instances.
-    /// </summary>
+    /// <summary>Invokes the eleven-type WithInstance overload and captures the resolved instances.</summary>
     /// <param name="builder">The builder to invoke the overload on.</param>
     /// <param name="captured1">Receives the resolved instance 1.</param>
     /// <param name="captured2">Receives the resolved instance 2.</param>
@@ -175,7 +171,7 @@ public partial class BuilderInstanceMixinsTests
     /// <param name="captured11">Receives the resolved instance 11.</param>
     [System.Diagnostics.CodeAnalysis.SuppressMessage(
         "Major Code Smell",
-        "S107:Methods should not have too many parameters",
+        "SST1472:Signatures should not declare too many parameters",
         Justification = "Test exercises a variadic overload.")]
     private static void InvokeWithInstance11(
         ReactiveUIBuilder builder,
@@ -202,7 +198,7 @@ public partial class BuilderInstanceMixinsTests
         InstanceService09? c9 = null;
         InstanceService10? c10 = null;
         InstanceService11? c11 = null;
-        builder
+        _ = builder
             .WithInstance<
                 InstanceService01,
                 InstanceService02,
@@ -241,9 +237,7 @@ public partial class BuilderInstanceMixinsTests
         captured11 = c11;
     }
 
-    /// <summary>
-    /// Invokes the twelve-type WithInstance overload and captures the resolved instances.
-    /// </summary>
+    /// <summary>Invokes the twelve-type WithInstance overload and captures the resolved instances.</summary>
     /// <param name="builder">The builder to invoke the overload on.</param>
     /// <param name="captured1">Receives the resolved instance 1.</param>
     /// <param name="captured2">Receives the resolved instance 2.</param>
@@ -259,7 +253,7 @@ public partial class BuilderInstanceMixinsTests
     /// <param name="captured12">Receives the resolved instance 12.</param>
     [System.Diagnostics.CodeAnalysis.SuppressMessage(
         "Major Code Smell",
-        "S107:Methods should not have too many parameters",
+        "SST1472:Signatures should not declare too many parameters",
         Justification = "Test exercises a variadic overload.")]
     private static void InvokeWithInstance12(
         ReactiveUIBuilder builder,
@@ -288,7 +282,7 @@ public partial class BuilderInstanceMixinsTests
         InstanceService10? c10 = null;
         InstanceService11? c11 = null;
         InstanceService12? c12 = null;
-        builder
+        _ = builder
             .WithInstance<
                 InstanceService01,
                 InstanceService02,
@@ -330,9 +324,7 @@ public partial class BuilderInstanceMixinsTests
         captured12 = c12;
     }
 
-    /// <summary>
-    /// Invokes the thirteen-type WithInstance overload and captures the resolved instances.
-    /// </summary>
+    /// <summary>Invokes the thirteen-type WithInstance overload and captures the resolved instances.</summary>
     /// <param name="builder">The builder to invoke the overload on.</param>
     /// <param name="captured1">Receives the resolved instance 1.</param>
     /// <param name="captured2">Receives the resolved instance 2.</param>
@@ -349,7 +341,7 @@ public partial class BuilderInstanceMixinsTests
     /// <param name="captured13">Receives the resolved instance 13.</param>
     [System.Diagnostics.CodeAnalysis.SuppressMessage(
         "Major Code Smell",
-        "S107:Methods should not have too many parameters",
+        "SST1472:Signatures should not declare too many parameters",
         Justification = "Test exercises a variadic overload.")]
     private static void InvokeWithInstance13(
         ReactiveUIBuilder builder,
@@ -380,7 +372,7 @@ public partial class BuilderInstanceMixinsTests
         InstanceService11? c11 = null;
         InstanceService12? c12 = null;
         InstanceService13? c13 = null;
-        builder
+        _ = builder
             .WithInstance<
                 InstanceService01,
                 InstanceService02,
@@ -425,9 +417,7 @@ public partial class BuilderInstanceMixinsTests
         captured13 = c13;
     }
 
-    /// <summary>
-    /// Invokes the fourteen-type WithInstance overload and captures the resolved instances.
-    /// </summary>
+    /// <summary>Invokes the fourteen-type WithInstance overload and captures the resolved instances.</summary>
     /// <param name="builder">The builder to invoke the overload on.</param>
     /// <param name="captured1">Receives the resolved instance 1.</param>
     /// <param name="captured2">Receives the resolved instance 2.</param>
@@ -445,7 +435,7 @@ public partial class BuilderInstanceMixinsTests
     /// <param name="captured14">Receives the resolved instance 14.</param>
     [System.Diagnostics.CodeAnalysis.SuppressMessage(
         "Major Code Smell",
-        "S107:Methods should not have too many parameters",
+        "SST1472:Signatures should not declare too many parameters",
         Justification = "Test exercises a variadic overload.")]
     private static void InvokeWithInstance14(
         ReactiveUIBuilder builder,
@@ -478,7 +468,7 @@ public partial class BuilderInstanceMixinsTests
         InstanceService12? c12 = null;
         InstanceService13? c13 = null;
         InstanceService14? c14 = null;
-        builder
+        _ = builder
             .WithInstance<
                 InstanceService01,
                 InstanceService02,
@@ -526,9 +516,7 @@ public partial class BuilderInstanceMixinsTests
         captured14 = c14;
     }
 
-    /// <summary>
-    /// Invokes the fifteen-type WithInstance overload and captures the resolved instances.
-    /// </summary>
+    /// <summary>Invokes the fifteen-type WithInstance overload and captures the resolved instances.</summary>
     /// <param name="builder">The builder to invoke the overload on.</param>
     /// <param name="captured1">Receives the resolved instance 1.</param>
     /// <param name="captured2">Receives the resolved instance 2.</param>
@@ -547,7 +535,7 @@ public partial class BuilderInstanceMixinsTests
     /// <param name="captured15">Receives the resolved instance 15.</param>
     [System.Diagnostics.CodeAnalysis.SuppressMessage(
         "Major Code Smell",
-        "S107:Methods should not have too many parameters",
+        "SST1472:Signatures should not declare too many parameters",
         Justification = "Test exercises a variadic overload.")]
     private static void InvokeWithInstance15(
         ReactiveUIBuilder builder,
@@ -582,7 +570,7 @@ public partial class BuilderInstanceMixinsTests
         InstanceService13? c13 = null;
         InstanceService14? c14 = null;
         InstanceService15? c15 = null;
-        builder
+        _ = builder
             .WithInstance<
                 InstanceService01,
                 InstanceService02,
@@ -633,9 +621,7 @@ public partial class BuilderInstanceMixinsTests
         captured15 = c15;
     }
 
-    /// <summary>
-    /// Invokes the sixteen-type WithInstance overload and captures the resolved instances.
-    /// </summary>
+    /// <summary>Invokes the sixteen-type WithInstance overload and captures the resolved instances.</summary>
     /// <param name="builder">The builder to invoke the overload on.</param>
     /// <param name="captured1">Receives the resolved instance 1.</param>
     /// <param name="captured2">Receives the resolved instance 2.</param>
@@ -655,7 +641,7 @@ public partial class BuilderInstanceMixinsTests
     /// <param name="captured16">Receives the resolved instance 16.</param>
     [System.Diagnostics.CodeAnalysis.SuppressMessage(
         "Major Code Smell",
-        "S107:Methods should not have too many parameters",
+        "SST1472:Signatures should not declare too many parameters",
         Justification = "Test exercises a variadic overload.")]
     private static void InvokeWithInstance16(
         ReactiveUIBuilder builder,
@@ -692,7 +678,7 @@ public partial class BuilderInstanceMixinsTests
         InstanceService14? c14 = null;
         InstanceService15? c15 = null;
         InstanceService16? c16 = null;
-        builder
+        _ = builder
             .WithInstance<
                 InstanceService01,
                 InstanceService02,

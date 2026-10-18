@@ -3,25 +3,20 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
 
+using System.Diagnostics;
+
 namespace ReactiveUI.Builder.BlazorServer.Models;
 
-/// <summary>
-/// A single chat message.
-/// </summary>
+/// <summary>A single chat message.</summary>
+[DebuggerDisplay("ChatMessage Sender={Sender}, Text={Text}")]
 public class ChatMessage
 {
-    /// <summary>
-    /// Gets or sets the sender name.
-    /// </summary>
+    /// <summary>Gets or sets the sender name.</summary>
     public string Sender { get; set; } = string.Empty;
 
-    /// <summary>
-    /// Gets or sets the message text.
-    /// </summary>
+    /// <summary>Gets or sets the message text.</summary>
     public string Text { get; set; } = string.Empty;
 
-    /// <summary>
-    /// Gets or sets the timestamp.
-    /// </summary>
+    /// <summary>Gets or sets the timestamp.</summary>
     public DateTimeOffset Timestamp { get; set; } = TimeProvider.System.GetUtcNow();
 }

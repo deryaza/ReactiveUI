@@ -1,46 +1,36 @@
-﻿// Copyright (c) 2009-2026 .NET Foundation and Contributors. All rights reserved.
+// Copyright (c) 2009-2026 .NET Foundation and Contributors. All rights reserved.
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
 
-using System.Reactive;
-using System.Reactive.Linq;
 using System.Security.Cryptography;
-using DynamicData.Binding;
 
 namespace ReactiveUI.Tests.ObservedChanged.Mocks;
 
-/// <summary>
-///     A sample view model that implements a game.
-/// </summary>
+/// <summary>A sample view model that implements a game.</summary>
 /// <seealso cref="ReactiveObject" />
 public class NewGameViewModel : ReactiveObject
 {
-    /// <summary>
-    ///     The backing field for the new player name.
-    /// </summary>
-    private string? _newPlayerName;
-
-    /// <summary>
-    ///     Initializes a new instance of the <see cref="NewGameViewModel" /> class.
-    /// </summary>
+    /// <summary>Initializes a new instance of the <see cref="NewGameViewModel" /> class.</summary>
     public NewGameViewModel()
     {
+        const int MaxPlayers = 7;
+
         Players = [];
 
         var canStart = Players.ToReactiveChangeSet().WhenCountChanged().Select(_ => Players.Count >= 3);
         StartGame = ReactiveCommand.Create(
-            () => { },
+            static () => { },
             canStart);
         RandomizeOrder = ReactiveCommand.Create(
             () =>
             {
-                using (Players.SuspendNotifications())
+                var list = Players.ToList();
+                ShuffleCrypto(list);
+                Players.Clear();
+                foreach (var player in list)
                 {
-                    var list = Players.ToList();
-                    ShuffleCrypto(list);
-                    Players.Clear();
-                    Players.AddRange(list);
+                    Players.Add(player);
                 }
             },
             canStart);
@@ -50,8 +40,8 @@ public class NewGameViewModel : ReactiveObject
             x => x.Players.Count,
             x => x.NewPlayerName,
             (count, newPlayerName) =>
-                count < 7 && !string.IsNullOrWhiteSpace(newPlayerName) &&
-                !Players.Contains(newPlayerName));
+                count < MaxPlayers && !string.IsNullOrWhiteSpace(newPlayerName)
+                && !Players.Contains(newPlayerName));
         AddPlayer = ReactiveCommand.Create(
             () =>
             {
@@ -66,45 +56,31 @@ public class NewGameViewModel : ReactiveObject
             canAddPlayer);
     }
 
-    /// <summary>
-    ///     Gets the add player command.
-    /// </summary>
-    public ReactiveCommand<Unit, Unit> AddPlayer { get; }
+    /// <summary>Gets the add player command.</summary>
+    public ReactiveCommand<RxVoid, RxVoid> AddPlayer { get; }
 
-    /// <summary>
-    ///     Gets the players collection.
-    /// </summary>
-    public ObservableCollectionExtended<string> Players { get; }
+    /// <summary>Gets the players collection.</summary>
+    public ObservableCollection<string> Players { get; }
 
-    /// <summary>
-    ///     Gets the randomize order command.
-    /// </summary>
-    public ReactiveCommand<Unit, Unit> RandomizeOrder { get; }
+    /// <summary>Gets the randomize order command.</summary>
+    public ReactiveCommand<RxVoid, RxVoid> RandomizeOrder { get; }
 
-    /// <summary>
-    ///     Gets the remove player command.
-    /// </summary>
-    public ReactiveCommand<string, Unit> RemovePlayer { get; }
+    /// <summary>Gets the remove player command.</summary>
+    public ReactiveCommand<string, RxVoid> RemovePlayer { get; }
 
-    /// <summary>
-    ///     Gets the start game command.
-    /// </summary>
-    public ReactiveCommand<Unit, Unit> StartGame { get; }
+    /// <summary>Gets the start game command.</summary>
+    public ReactiveCommand<RxVoid, RxVoid> StartGame { get; }
 
-    /// <summary>
-    ///     Gets or sets the new player name.
-    /// </summary>
+    /// <summary>Gets or sets the new player name.</summary>
     public string? NewPlayerName
     {
-        get => _newPlayerName;
+        get;
         set => this.RaiseAndSetIfChanged(
-            ref _newPlayerName,
+            ref field,
             value);
     }
 
-    /// <summary>
-    ///     Shuffles the list in place using a cryptographically secure random number generator.
-    /// </summary>
+    /// <summary>Shuffles the list in place using a cryptographically secure random number generator.</summary>
     /// <typeparam name="T">The type of the elements in the list.</typeparam>
     /// <param name="list">The list to shuffle.</param>
     private static void ShuffleCrypto<T>(List<T> list)

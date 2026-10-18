@@ -3,13 +3,11 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
 
-using ReactiveUI.Helpers;
+using System.Runtime.CompilerServices;
 
 namespace ReactiveUI.Internal;
 
-/// <summary>
-/// A sink that combines the latest value from two sources.
-/// </summary>
+/// <summary>A sink that combines the latest value from two sources.</summary>
 /// <typeparam name="TFirst">The first source's element type.</typeparam>
 /// <typeparam name="TSecond">The second source's element type.</typeparam>
 internal sealed class CombineLatestSink<TFirst, TSecond> : IDisposable
@@ -50,6 +48,10 @@ internal sealed class CombineLatestSink<TFirst, TSecond> : IDisposable
     /// <param name="second">The second source.</param>
     /// <param name="onNext">Invoked with the latest pair once both sources have produced a value, and on every subsequent change.</param>
     /// <param name="onError">Optional callback invoked when either source errors.</param>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage(
+        "Design",
+        "SST2403:'this' escapes before construction finishes",
+        Justification = "'this' is captured only by the two inner observers stored in this sink's subscription fields; every field they touch is assigned before Subscribe, so nothing escapes.")]
     public CombineLatestSink(
         IObservable<TFirst> first,
         IObservable<TSecond> second,
@@ -123,9 +125,11 @@ internal sealed class CombineLatestSink<TFirst, TSecond> : IDisposable
     private sealed class FirstObserver(CombineLatestSink<TFirst, TSecond> parent) : IObserver<TFirst>
     {
         /// <inheritdoc/>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void OnNext(TFirst value) => parent.OnFirst(value);
 
         /// <inheritdoc/>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void OnError(Exception error) => parent.OnError(error);
 
         /// <inheritdoc/>
@@ -139,9 +143,11 @@ internal sealed class CombineLatestSink<TFirst, TSecond> : IDisposable
     private sealed class SecondObserver(CombineLatestSink<TFirst, TSecond> parent) : IObserver<TSecond>
     {
         /// <inheritdoc/>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void OnNext(TSecond value) => parent.OnSecond(value);
 
         /// <inheritdoc/>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void OnError(Exception error) => parent.OnError(error);
 
         /// <inheritdoc/>

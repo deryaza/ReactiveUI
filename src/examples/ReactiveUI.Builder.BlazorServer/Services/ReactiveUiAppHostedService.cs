@@ -4,31 +4,25 @@
 // See the LICENSE file in the project root for full license information.
 
 using System.Diagnostics;
-using System.Reactive.Linq;
 using ReactiveUI.Builder.BlazorServer.Models;
 using Splat;
 
 namespace ReactiveUI.Builder.BlazorServer.Services;
 
-/// <summary>
-/// Service to manage ReactiveUI app lifecycle in Blazor Server.
-/// </summary>
+/// <summary>Service to manage ReactiveUI app lifecycle in Blazor Server.</summary>
+[DebuggerDisplay("ReactiveUiAppHostedService")]
 public sealed class ReactiveUiAppHostedService : IHostedService
 {
-    /// <summary>
-    /// The suspension driver used to load and persist application state to disk.
-    /// </summary>
+    /// <summary>The suspension driver used to load and persist application state to disk.</summary>
     private FileJsonSuspensionDriver? _driver;
 
-    /// <summary>
-    /// Initializes the application state and starts required services asynchronously.
-    /// </summary>
+    /// <summary>Initializes the application state and starts required services asynchronously.</summary>
+    /// <param name="cancellationToken">A cancellation token that can be used to cancel the asynchronous operation.</param>
+    /// <returns>A task that represents the asynchronous start operation.</returns>
     /// <remarks>This method loads any previously persisted application state and notifies listeners if the
     /// state changes. It also starts network and lifetime coordination services required for the application's
     /// operation. If loading the persisted state fails, the application continues with a new state instance.
     /// </remarks>
-    /// <param name="cancellationToken">A cancellation token that can be used to cancel the asynchronous operation.</param>
-    /// <returns>A task that represents the asynchronous start operation.</returns>
     public Task StartAsync(CancellationToken cancellationToken)
     {
         RxSuspension.SuspensionHost.CreateNewAppState = static () => new ChatState();
@@ -40,7 +34,7 @@ public sealed class ReactiveUiAppHostedService : IHostedService
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             "ReactiveUI.Builder.BlazorServer",
             "state.json");
-        Directory.CreateDirectory(Path.GetDirectoryName(statePath)!);
+        _ = Directory.CreateDirectory(Path.GetDirectoryName(statePath)!);
 
         _driver = new(statePath);
 
@@ -51,14 +45,14 @@ public sealed class ReactiveUiAppHostedService : IHostedService
         _ = _driver
             .LoadState()
             .ObserveOn(RxSchedulers.MainThreadScheduler)
-            .Subscribe(
+            .Subscribe(Witness.Create<object?>(
                 static stateObj =>
                 {
                     RxSuspension.SuspensionHost.AppState = stateObj;
                     MessageBus.Current.SendMessage(new ChatStateChanged());
                     Trace.TraceInformation("[App] State loaded");
                 },
-                static ex => Trace.TraceInformation($"[App] State load failed: {ex.Message}"));
+                static ex => Trace.TraceInformation($"[App] State load failed: {ex.Message}")));
 
         var lifetime = Locator.Current.GetService<AppLifetimeCoordinator>();
         var count = lifetime?.Increment() ?? 1;
@@ -67,15 +61,12 @@ public sealed class ReactiveUiAppHostedService : IHostedService
         return Task.CompletedTask;
     }
 
-    /// <summary>
-    /// Performs application shutdown tasks asynchronously, including saving application state and releasing network
-    /// resources.
-    /// </summary>
+    /// <summary>Performs application shutdown tasks asynchronously, including saving application state and releasing network resources.</summary>
+    /// <param name="cancellationToken">A cancellation token that can be used to cancel the shutdown operation.</param>
+    /// <returns>A task that represents the asynchronous shutdown operation.</returns>
     /// <remarks>If this is the last running instance, the method saves the current application state before
     /// disposing of network resources. Subsequent calls after all instances have exited will not trigger additional
     /// state saves.</remarks>
-    /// <param name="cancellationToken">A cancellation token that can be used to cancel the shutdown operation.</param>
-    /// <returns>A task that represents the asynchronous shutdown operation.</returns>
     public async Task StopAsync(CancellationToken cancellationToken)
     {
         var lifetime = Locator.Current.GetService<AppLifetimeCoordinator>();

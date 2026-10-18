@@ -3,45 +3,30 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
 
-using System.Reactive.Linq;
-using Microsoft.AspNetCore.Components.Web;
 using ReactiveUI.Blazor;
 using ReactiveUI.Builder.BlazorServer.Models;
 using ReactiveUI.Builder.BlazorServer.ViewModels;
 
 namespace ReactiveUI.Builder.BlazorServer.Views;
 
-/// <summary>
-/// Lobby (rooms listing) view.
-/// </summary>
+/// <summary>Lobby (rooms listing) view.</summary>
 public partial class LobbyView : ReactiveComponentBase<LobbyViewModel>
 {
-    /// <summary>
-    /// Handles the create-room button click by executing the view model's create command.
-    /// </summary>
-    /// <param name="args">The mouse event arguments raised by the button click.</param>
+    /// <summary>Handles the create-room button click by executing the view model's create command.</summary>
     /// <returns>A task that represents the asynchronous create operation.</returns>
-    private async Task OnCreateRoomClicked(MouseEventArgs args)
+    private async Task OnCreateRoomClicked()
     {
-        if (ViewModel is null)
-        {
-            throw new ArgumentNullException(nameof(ViewModel));
-        }
+        ArgumentExceptionHelper.ThrowIfNull(ViewModel);
 
         await ViewModel.CreateRoom.Execute();
     }
 
-    /// <summary>
-    /// Handles the delete button click by executing the view model's delete command for the selected room.
-    /// </summary>
-    /// <param name="args">The mouse event arguments raised by the button click.</param>
+    /// <summary>Handles the delete button click by executing the view model's delete command for the selected room.</summary>
     /// <returns>A task that represents the asynchronous delete operation.</returns>
-    private async Task OnDeleteSelectedClicked(MouseEventArgs args)
+    /// <exception cref="InvalidOperationException">No room is currently selected, so there is nothing to delete.</exception>
+    private async Task OnDeleteSelectedClicked()
     {
-        if (ViewModel is null)
-        {
-            throw new ArgumentNullException(nameof(ViewModel));
-        }
+        ArgumentExceptionHelper.ThrowIfNull(ViewModel);
 
         if (ViewModel.SelectedChatRoom is null)
         {
@@ -51,31 +36,21 @@ public partial class LobbyView : ReactiveComponentBase<LobbyViewModel>
         await ViewModel.DeleteRoom.Execute(ViewModel.SelectedChatRoom);
     }
 
-    /// <summary>
-    /// Handles a single click on a room by marking it as the currently selected room.
-    /// </summary>
+    /// <summary>Handles a single click on a room by marking it as the currently selected room.</summary>
     /// <param name="room">The room that was clicked.</param>
     private void OnRoomClicked(ChatRoom room)
     {
-        if (ViewModel is null)
-        {
-            throw new ArgumentNullException(nameof(ViewModel));
-        }
+        ArgumentExceptionHelper.ThrowIfNull(ViewModel);
 
         ViewModel.SelectedChatRoom = room;
     }
 
-    /// <summary>
-    /// Handles a double click on a room by executing the view model's join command to enter it.
-    /// </summary>
+    /// <summary>Handles a double click on a room by executing the view model's join command to enter it.</summary>
     /// <param name="room">The room that was double clicked.</param>
     /// <returns>A task that represents the asynchronous join operation.</returns>
     private async Task OnRoomDoubleClicked(ChatRoom room)
     {
-        if (ViewModel is null)
-        {
-            throw new ArgumentNullException(nameof(ViewModel));
-        }
+        ArgumentExceptionHelper.ThrowIfNull(ViewModel);
 
         await ViewModel.JoinRoom.Execute(room);
     }

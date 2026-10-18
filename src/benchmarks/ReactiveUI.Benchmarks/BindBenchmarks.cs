@@ -3,15 +3,15 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
 
+using System.Diagnostics;
 using BenchmarkDotNet.Attributes;
 
 namespace ReactiveUI.Benchmarks;
 
-/// <summary>
-/// Benchmarks the property-binding sinks: cold one-way/two-way binding setup and view-model to view propagation.
-/// </summary>
+/// <summary>Benchmarks the property-binding sinks: cold one-way/two-way binding setup and view-model to view propagation.</summary>
 [MemoryDiagnoser]
 [MarkdownExporterAttribute.GitHub]
+[DebuggerDisplay("BindBenchmarks")]
 public class BindBenchmarks
 {
     /// <summary>The number of source changes pushed per propagation benchmark.</summary>
@@ -33,11 +33,11 @@ public class BindBenchmarks
     [GlobalSetup]
     public void Setup()
     {
-        _oneWayViewModel = new BenchmarkViewModel();
+        _oneWayViewModel = new();
         var oneWayView = new BenchmarkView { ViewModel = _oneWayViewModel };
         _oneWayBinding = oneWayView.OneWayBind(_oneWayViewModel, x => x.First, x => x.FirstText);
 
-        _twoWayViewModel = new BenchmarkViewModel();
+        _twoWayViewModel = new();
         var twoWayView = new BenchmarkView { ViewModel = _twoWayViewModel };
         _twoWayBinding = twoWayView.Bind(_twoWayViewModel, x => x.First, x => x.FirstText);
     }

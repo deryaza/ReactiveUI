@@ -3,11 +3,11 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
 
+using System.Runtime.CompilerServices;
+
 namespace ReactiveUI.Internal;
 
-/// <summary>
-/// Delegate-backed observer used internally where a one-shot anonymous subscriber is convenient.
-/// </summary>
+/// <summary>Delegate-backed observer used internally where a one-shot anonymous subscriber is convenient.</summary>
 /// <typeparam name="T">The element type.</typeparam>
 /// <param name="onNext">Per-value callback.</param>
 /// <param name="onError">Error callback.</param>
@@ -18,11 +18,14 @@ internal sealed class DelegateObserver<T>(
     Action? onCompleted = null) : IObserver<T>
 {
     /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void OnNext(T value) => onNext(value);
 
     /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void OnError(Exception error) => onError?.Invoke(error);
 
     /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void OnCompleted() => onCompleted?.Invoke();
 }

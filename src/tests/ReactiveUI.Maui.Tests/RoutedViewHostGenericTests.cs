@@ -3,48 +3,33 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
 
-using System.Reactive.Concurrency;
-using System.Reactive.Linq;
 using Microsoft.Maui.Controls;
 using ReactiveUI.Builder;
+using ReactiveUI.Primitives;
 using ReactiveUI.Tests.Utilities.AppBuilder;
 using Splat;
 using TUnit.Core.Executors;
 
 namespace ReactiveUI.Maui.Tests;
 
-/// <summary>
-/// Tests for the generic <see cref="RoutedViewHost{TViewModel}"/>.
-/// </summary>
+/// <summary>Tests for the generic <see cref="RoutedViewHost{TViewModel}"/>.</summary>
 [NotInParallel]
 [TestExecutor<MauiTestExecutor>]
-[System.Diagnostics.CodeAnalysis.SuppressMessage(
-    "Major Code Smell",
-    "S4018:Generic methods should provide type parameters",
-    Justification = "Test exercises a generic overload with explicit type arguments.")]
 public class RoutedViewHostGenericTests
 {
-    /// <summary>
-    /// The delay in milliseconds used to allow the scheduler to process title updates.
-    /// </summary>
+    /// <summary>The delay in milliseconds used to allow the scheduler to process title updates.</summary>
     private const int SchedulerProcessingDelayMs = 100;
 
-    /// <summary>
-    /// The title used for navigation title tests.
-    /// </summary>
+    /// <summary>The title used for navigation title tests.</summary>
     private const string TestTitle = "TestTitle";
 
-    /// <summary>
-    /// Tests that RouterProperty is registered for the generic type.
-    /// </summary>
+    /// <summary>Tests that RouterProperty is registered for the generic type.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     public async Task RouterProperty_IsRegistered() =>
         await Assert.That(RoutedViewHost<TestRoutableViewModel>.RouterProperty).IsNotNull();
 
-    /// <summary>
-    /// Tests that SetTitleOnNavigateProperty is registered for the generic type.
-    /// </summary>
+    /// <summary>Tests that SetTitleOnNavigateProperty is registered for the generic type.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     public async Task SetTitleOnNavigateProperty_IsRegistered() =>
@@ -65,23 +50,19 @@ public class RoutedViewHostGenericTests
         await Assert.That(type.IsGenericType).IsTrue();
     }
 
-    /// <summary>
-    /// Tests that Router property can be set and retrieved.
-    /// </summary>
+    /// <summary>Tests that Router property can be set and retrieved.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     [TestExecutor<MauiGenericRoutedViewHostTestExecutor>]
     public async Task Router_SetAndGet_WorksCorrectly()
     {
-        var router = new RoutingState(ImmediateScheduler.Instance);
+        var router = new RoutingState(Sequencer.Immediate);
         var host = new RoutedViewHost<TestRoutableViewModel> { Router = router };
 
         await Assert.That(host.Router).IsEqualTo(router);
     }
 
-    /// <summary>
-    /// Tests that SetTitleOnNavigate property can be set and retrieved.
-    /// </summary>
+    /// <summary>Tests that SetTitleOnNavigate property can be set and retrieved.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     [TestExecutor<MauiGenericRoutedViewHostTestExecutor>]
@@ -96,9 +77,7 @@ public class RoutedViewHostGenericTests
         await Assert.That(host.SetTitleOnNavigate).IsFalse();
     }
 
-    /// <summary>
-    /// Tests that PagesForViewModel returns empty observable for null view model.
-    /// </summary>
+    /// <summary>Tests that PagesForViewModel returns empty observable for null view model.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     [TestExecutor<MauiGenericRoutedViewHostTestExecutor>]
@@ -110,9 +89,7 @@ public class RoutedViewHostGenericTests
         await Assert.That(pages).IsEmpty();
     }
 
-    /// <summary>
-    /// Tests that PagesForViewModel throws when view is not found.
-    /// </summary>
+    /// <summary>Tests that PagesForViewModel throws when view is not found.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     [TestExecutor<MauiUnregisteredViewTestExecutor>]
@@ -124,9 +101,7 @@ public class RoutedViewHostGenericTests
             .Throws<Exception>();
     }
 
-    /// <summary>
-    /// Tests that PagesForViewModel returns page with view model set.
-    /// </summary>
+    /// <summary>Tests that PagesForViewModel returns page with view model set.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     [TestExecutor<MauiGenericRoutedViewHostTestExecutor>]
@@ -142,9 +117,7 @@ public class RoutedViewHostGenericTests
         await Assert.That(view.ViewModel).IsEqualTo(viewModel);
     }
 
-    /// <summary>
-    /// Tests that PagesForViewModel sets page title when SetTitleOnNavigate is true.
-    /// </summary>
+    /// <summary>Tests that PagesForViewModel sets page title when SetTitleOnNavigate is true.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     [TestExecutor<MauiGenericRoutedViewHostTestExecutor>]
@@ -157,9 +130,7 @@ public class RoutedViewHostGenericTests
         await Assert.That(pages[0].Title).IsEqualTo(TestTitle);
     }
 
-    /// <summary>
-    /// Tests that PagesForViewModel does not set page title when SetTitleOnNavigate is false.
-    /// </summary>
+    /// <summary>Tests that PagesForViewModel does not set page title when SetTitleOnNavigate is false.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     [TestExecutor<MauiGenericRoutedViewHostTestExecutor>]
@@ -172,9 +143,7 @@ public class RoutedViewHostGenericTests
         await Assert.That(pages[0].Title).IsNotEqualTo(TestTitle);
     }
 
-    /// <summary>
-    /// Tests that PageForViewModel throws for null view model.
-    /// </summary>
+    /// <summary>Tests that PageForViewModel throws for null view model.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     [TestExecutor<MauiGenericRoutedViewHostTestExecutor>]
@@ -186,9 +155,7 @@ public class RoutedViewHostGenericTests
             .Throws<ArgumentNullException>();
     }
 
-    /// <summary>
-    /// Tests that PageForViewModel throws when view is not found.
-    /// </summary>
+    /// <summary>Tests that PageForViewModel throws when view is not found.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     [TestExecutor<MauiUnregisteredViewTestExecutor>]
@@ -200,9 +167,7 @@ public class RoutedViewHostGenericTests
             .Throws<Exception>();
     }
 
-    /// <summary>
-    /// Tests that PageForViewModel returns page with view model set.
-    /// </summary>
+    /// <summary>Tests that PageForViewModel returns page with view model set.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     [TestExecutor<MauiGenericRoutedViewHostTestExecutor>]
@@ -213,13 +178,10 @@ public class RoutedViewHostGenericTests
         var page = host.PublicPageForViewModel(viewModel);
 
         await Assert.That(page).IsAssignableTo<TestRoutableView>();
-        var view = (TestRoutableView)page;
-        await Assert.That(view.ViewModel).IsEqualTo(viewModel);
+        await Assert.That(((TestRoutableView)page).ViewModel).IsEqualTo(viewModel);
     }
 
-    /// <summary>
-    /// Tests that PageForViewModel sets page title when SetTitleOnNavigate is true.
-    /// </summary>
+    /// <summary>Tests that PageForViewModel sets page title when SetTitleOnNavigate is true.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     [TestExecutor<MauiGenericRoutedViewHostTestExecutor>]
@@ -239,15 +201,11 @@ public class RoutedViewHostGenericTests
         await Assert.That(page.Title).IsEqualTo(TestTitle);
     }
 
-    /// <summary>
-    /// Test executor that sets up MAUI environment with view registration.
-    /// </summary>
+    /// <summary>Test executor that sets up MAUI environment with view registration.</summary>
     [NotInParallel]
     public sealed class MauiGenericRoutedViewHostTestExecutor : MauiTestExecutor
     {
-        /// <summary>
-        /// The helper that configures and tears down the ReactiveUI app builder.
-        /// </summary>
+        /// <summary>The helper that configures and tears down the ReactiveUI app builder.</summary>
         private readonly AppBuilderTestHelper _helper = new();
 
         /// <inheritdoc/>
@@ -255,15 +213,15 @@ public class RoutedViewHostGenericTests
         {
             base.Initialize();
 
-            _helper.Initialize(builder =>
+            _helper.Initialize(static builder =>
             {
-                builder
+                _ = builder
                     .WithMaui()
                     .RegisterView<TestRoutableView, TestRoutableViewModel>()
                     .WithCoreServices();
 
                 // Register IScreen for constructor
-                AppLocator.CurrentMutable.Register<IScreen>(() => new TestScreen());
+                AppLocator.CurrentMutable.Register<IScreen>(static () => new TestScreen());
             });
         }
 
@@ -275,15 +233,11 @@ public class RoutedViewHostGenericTests
         }
     }
 
-    /// <summary>
-    /// Test executor that sets up MAUI environment without view registration for testing error cases.
-    /// </summary>
+    /// <summary>Test executor that sets up MAUI environment without view registration for testing error cases.</summary>
     [NotInParallel]
     public sealed class MauiUnregisteredViewTestExecutor : MauiTestExecutor
     {
-        /// <summary>
-        /// The helper that configures and tears down the ReactiveUI app builder.
-        /// </summary>
+        /// <summary>The helper that configures and tears down the ReactiveUI app builder.</summary>
         private readonly AppBuilderTestHelper _helper = new();
 
         /// <inheritdoc/>
@@ -291,14 +245,14 @@ public class RoutedViewHostGenericTests
         {
             base.Initialize();
 
-            _helper.Initialize(builder =>
+            _helper.Initialize(static builder =>
             {
-                builder
+                _ = builder
                     .WithMaui()
                     .WithCoreServices();
 
                 // Register IScreen for constructor, but don't register the view
-                AppLocator.CurrentMutable.Register<IScreen>(() => new TestScreen());
+                AppLocator.CurrentMutable.Register<IScreen>(static () => new TestScreen());
             });
         }
 
@@ -310,66 +264,39 @@ public class RoutedViewHostGenericTests
         }
     }
 
-    /// <summary>
-    /// Testable RoutedViewHost that exposes protected methods.
-    /// </summary>
+    /// <summary>Testable RoutedViewHost that exposes protected methods.</summary>
     private sealed class TestableRoutedViewHost : RoutedViewHost<TestRoutableViewModel>
     {
-        /// <summary>
-        /// Exposes the protected PagesForViewModel method.
-        /// </summary>
+        /// <summary>Exposes the protected PagesForViewModel method.</summary>
         /// <param name="vm">The view model.</param>
         /// <returns>An observable of pages.</returns>
         public IObservable<Page> PublicPagesForViewModel(IRoutableViewModel? vm) =>
             PagesForViewModel(vm);
 
-        /// <summary>
-        /// Exposes the protected PageForViewModel method.
-        /// </summary>
+        /// <summary>Exposes the protected PageForViewModel method.</summary>
         /// <param name="vm">The view model.</param>
         /// <returns>The page for the view model.</returns>
         public Page PublicPageForViewModel(IRoutableViewModel vm) =>
             PageForViewModel(vm);
-
-        /// <summary>
-        /// Exposes the protected InvalidateCurrentViewModel method.
-        /// </summary>
-        public void PublicInvalidateCurrentViewModel() =>
-            InvalidateCurrentViewModel();
-
-        /// <summary>
-        /// Exposes the protected SyncNavigationStacksAsync method.
-        /// </summary>
-        /// <returns>A task representing the asynchronous operation.</returns>
-        public Task PublicSyncNavigationStacksAsync() =>
-            SyncNavigationStacksAsync();
     }
 
-    /// <summary>
-    /// Testable RoutedViewHost with unregistered view model for error testing.
-    /// </summary>
+    /// <summary>Testable RoutedViewHost with unregistered view model for error testing.</summary>
     private sealed class TestableRoutedViewHostUnregistered : RoutedViewHost<UnregisteredViewModel>
     {
-        /// <summary>
-        /// Exposes the protected PagesForViewModel method.
-        /// </summary>
+        /// <summary>Exposes the protected PagesForViewModel method.</summary>
         /// <param name="vm">The view model.</param>
         /// <returns>An observable of pages.</returns>
         public IObservable<Page> PublicPagesForViewModel(IRoutableViewModel? vm) =>
             PagesForViewModel(vm);
 
-        /// <summary>
-        /// Exposes the protected PageForViewModel method.
-        /// </summary>
+        /// <summary>Exposes the protected PageForViewModel method.</summary>
         /// <param name="vm">The view model.</param>
         /// <returns>The page for the view model.</returns>
         public Page PublicPageForViewModel(IRoutableViewModel vm) =>
             PageForViewModel(vm);
     }
 
-    /// <summary>
-    /// Test routable view model.
-    /// </summary>
+    /// <summary>Test routable view model.</summary>
     private sealed class TestRoutableViewModel : ReactiveObject, IRoutableViewModel
     {
         /// <inheritdoc/>
@@ -379,9 +306,7 @@ public class RoutedViewHostGenericTests
         public IScreen HostScreen { get; } = null!;
     }
 
-    /// <summary>
-    /// Test routable view.
-    /// </summary>
+    /// <summary>Test routable view.</summary>
     private sealed class TestRoutableView : ContentPage, IViewFor<TestRoutableViewModel>
     {
         /// <inheritdoc/>
@@ -395,9 +320,7 @@ public class RoutedViewHostGenericTests
         }
     }
 
-    /// <summary>
-    /// Unregistered view model for testing error cases.
-    /// </summary>
+    /// <summary>Unregistered view model for testing error cases.</summary>
     private sealed class UnregisteredViewModel : ReactiveObject, IRoutableViewModel
     {
         /// <inheritdoc/>
@@ -407,12 +330,10 @@ public class RoutedViewHostGenericTests
         public IScreen HostScreen { get; } = null!;
     }
 
-    /// <summary>
-    /// Test screen implementation.
-    /// </summary>
+    /// <summary>Test screen implementation.</summary>
     private sealed class TestScreen : ReactiveObject, IScreen
     {
         /// <inheritdoc/>
-        public RoutingState Router { get; } = new(ImmediateScheduler.Instance);
+        public RoutingState Router { get; } = new(Sequencer.Immediate);
     }
 }

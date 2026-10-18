@@ -3,18 +3,23 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
 
-namespace ReactiveUI;
+using System.Diagnostics;
+using System.Runtime.CompilerServices;
 
-/// <summary>
-/// Returns the current orientation of the device on iOS.
-/// </summary>
+#if REACTIVE_SHIM
+namespace ReactiveUI.Reactive;
+#else
+namespace ReactiveUI;
+#endif
+/// <summary>Returns the current orientation of the device on iOS.</summary>
 public class PlatformOperations : IPlatformOperations
 {
     /// <inheritdoc/>
-    public string? GetOrientation()
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public string? GetOrientation() =>
 #if UIKIT && !TVOS
-        => UIKit.UIDevice.CurrentDevice.Orientation.ToString();
+        UIKit.UIDevice.CurrentDevice.Orientation.ToString();
 #else
-        => null;
+        null;
 #endif
 }

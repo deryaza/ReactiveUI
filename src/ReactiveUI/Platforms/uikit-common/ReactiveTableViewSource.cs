@@ -5,13 +5,16 @@
 
 using System.Collections.Specialized;
 using System.ComponentModel;
-using System.Reactive.Subjects;
+using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using Foundation;
-using ReactiveUI.Helpers;
 using UIKit;
 
+#if REACTIVE_SHIM
+namespace ReactiveUI.Reactive;
+#else
 namespace ReactiveUI;
-
+#endif
 /// <summary>
 /// ReactiveTableViewSource is a Table View Source that is connected to
 /// a List that automatically updates the View based on the
@@ -19,20 +22,25 @@ namespace ReactiveUI;
 /// items are animated in and out as items are added.
 /// </summary>
 /// <typeparam name="TSource">The source type.</typeparam>
+[DebuggerDisplay("{Data}")]
 public class ReactiveTableViewSource<TSource> : UITableViewSource, IReactiveNotifyPropertyChanged<ReactiveTableViewSource<TSource>>, IHandleObservableErrors, IReactiveObject
 {
     /// <summary>The common reactive source that manages section data and drives table view updates.</summary>
     private readonly CommonReactiveSource<TSource, UITableView, UITableViewCell, TableSectionInformation<TSource>> _commonSource;
 
     /// <summary>The subject that publishes items whenever a table view row is selected.</summary>
-    private readonly Subject<object?> _elementSelected = new();
+    private readonly Signal<object?> _elementSelected = new();
 
     /// <summary>The adapter that bridges the UITableView with the reactive source.</summary>
     private readonly UITableViewAdapter _adapter;
 
-    /// <summary>
-    /// Initializes a new instance of the <see cref="ReactiveTableViewSource{TSource}"/> class.
-    /// </summary>
+    /// <summary>The <see cref="INotifyPropertyChanging.PropertyChanging"/> handlers; subscribing enables the classic event.</summary>
+    private PropertyChangingEventHandler? _propertyChanging;
+
+    /// <summary>The <see cref="INotifyPropertyChanged.PropertyChanged"/> handlers; subscribing enables the classic event.</summary>
+    private PropertyChangedEventHandler? _propertyChanged;
+
+    /// <summary>Initializes a new instance of the <see cref="ReactiveTableViewSource{TSource}"/> class.</summary>
     /// <param name="tableView">The table view.</param>
     /// <param name="collection">The collection.</param>
     /// <param name="cellKey">The cell key.</param>
@@ -42,9 +50,7 @@ public class ReactiveTableViewSource<TSource> : UITableViewSource, IReactiveNoti
     {
     }
 
-    /// <summary>
-    /// Initializes a new instance of the <see cref="ReactiveTableViewSource{TSource}"/> class.
-    /// </summary>
+    /// <summary>Initializes a new instance of the <see cref="ReactiveTableViewSource{TSource}"/> class.</summary>
     /// <param name="tableView">The table view.</param>
     /// <param name="collection">The collection.</param>
     /// <param name="cellKey">The cell key.</param>
@@ -55,27 +61,39 @@ public class ReactiveTableViewSource<TSource> : UITableViewSource, IReactiveNoti
         Data = [new TableSectionInformation<TSource, UITableViewCell>(collection, cellKey, sizeHint, initializeCellAction)
         ];
 
-    /// <summary>
-    /// Initializes a new instance of the <see cref="ReactiveTableViewSource{TSource}"/> class.
-    /// </summary>
+    /// <summary>Initializes a new instance of the <see cref="ReactiveTableViewSource{TSource}"/> class.</summary>
     /// <param name="tableView">The table view.</param>
     public ReactiveTableViewSource(UITableView tableView)
     {
-        _adapter = new UITableViewAdapter(tableView);
-        _commonSource = new CommonReactiveSource<TSource, UITableView, UITableViewCell, TableSectionInformation<TSource>>(_adapter);
+        _adapter = new(tableView);
+        _commonSource = new(_adapter);
     }
 
     /// <inheritdoc/>
-    public event PropertyChangingEventHandler? PropertyChanging;
+    public event PropertyChangingEventHandler? PropertyChanging
+    {
+        add
+        {
+            this.SubscribePropertyChangingEvents();
+            _propertyChanging += value;
+        }
+
+        remove => _propertyChanging -= value;
+    }
 
     /// <inheritdoc/>
-    public event PropertyChangedEventHandler? PropertyChanged;
+    public event PropertyChangedEventHandler? PropertyChanged
+    {
+        add
+        {
+            this.SubscribePropertyChangedEvents();
+            _propertyChanged += value;
+        }
 
-    /// <summary>
-    /// Gets or sets the data that should be displayed by this
-    /// <see cref="ReactiveTableViewSource{TSource}"/>.  You should
-    /// probably bind your view model to this property.
-    /// </summary>
+        remove => _propertyChanged -= value;
+    }
+
+    /// <summary>Gets or sets the data that should be displayed by this <see cref="ReactiveTableViewSource{TSource}"/>. You should probably bind your view model to this property.</summary>
     /// <value>The data.</value>
     public IReadOnlyList<TableSectionInformation<TSource>> Data
     {
@@ -94,59 +112,45 @@ public class ReactiveTableViewSource<TSource> : UITableViewSource, IReactiveNoti
         }
     }
 
-    /// <summary>
-    /// Gets an IObservable that is a hook to <see cref="RowSelected"/> calls.
-    /// </summary>
+    /// <summary>Gets an IObservable that is a hook to <see cref="RowSelected"/> calls.</summary>
     public IObservable<object?> ElementSelected => _elementSelected;
 
-    /// <summary>
-    /// Gets or sets the row animation to use when UITableView.InsertSections is invoked.
-    /// </summary>
+    /// <summary>Gets or sets the row animation to use when UITableView.InsertSections is invoked.</summary>
     public UITableViewRowAnimation InsertSectionsAnimation
     {
         get => _adapter.InsertSectionsAnimation;
         set => _adapter.InsertSectionsAnimation = value;
     }
 
-    /// <summary>
-    /// Gets or sets the row animation to use when UITableView.DeleteSections is invoked.
-    /// </summary>
+    /// <summary>Gets or sets the row animation to use when UITableView.DeleteSections is invoked.</summary>
     public UITableViewRowAnimation DeleteSectionsAnimation
     {
         get => _adapter.DeleteSectionsAnimation;
         set => _adapter.DeleteSectionsAnimation = value;
     }
 
-    /// <summary>
-    /// Gets or sets the row animation to use when UITableView.ReloadSections is invoked.
-    /// </summary>
+    /// <summary>Gets or sets the row animation to use when UITableView.ReloadSections is invoked.</summary>
     public UITableViewRowAnimation ReloadSectionsAnimation
     {
         get => _adapter.ReloadSectionsAnimation;
         set => _adapter.ReloadSectionsAnimation = value;
     }
 
-    /// <summary>
-    /// Gets or sets the row animation to use when UITableView.InsertRows is invoked.
-    /// </summary>
+    /// <summary>Gets or sets the row animation to use when UITableView.InsertRows is invoked.</summary>
     public UITableViewRowAnimation InsertRowsAnimation
     {
         get => _adapter.InsertRowsAnimation;
         set => _adapter.InsertRowsAnimation = value;
     }
 
-    /// <summary>
-    /// Gets or sets the row animation to use when UITableView.DeleteRows is invoked.
-    /// </summary>
+    /// <summary>Gets or sets the row animation to use when UITableView.DeleteRows is invoked.</summary>
     public UITableViewRowAnimation DeleteRowsAnimation
     {
         get => _adapter.DeleteRowsAnimation;
         set => _adapter.DeleteRowsAnimation = value;
     }
 
-    /// <summary>
-    /// Gets or sets the row animation to use when UITableView.ReloadRows is invoked.
-    /// </summary>
+    /// <summary>Gets or sets the row animation to use when UITableView.ReloadRows is invoked.</summary>
     public UITableViewRowAnimation ReloadRowsAnimation
     {
         get => _adapter.ReloadRowsAnimation;
@@ -178,12 +182,9 @@ public class ReactiveTableViewSource<TSource> : UITableViewSource, IReactiveNoti
     {
         // iOS may call this method even when we have no sections, but only if we've overriden
         // EstimatedHeight(UITableView, NSIndexPath) in our UITableViewSource
-        if (section >= _commonSource.NumberOfSections())
-        {
-            return 0;
-        }
-
-        return _commonSource.RowsInSection((int)section);
+        return section >= _commonSource.NumberOfSections()
+            ? 0
+            : _commonSource.RowsInSection((int)section);
     }
 
     /// <inheritdoc/>
@@ -238,41 +239,43 @@ public class ReactiveTableViewSource<TSource> : UITableViewSource, IReactiveNoti
         return footer?.View is null ? -1 : footer.Height;
     }
 
-#pragma warning disable CS8603 // Possible null reference return.
-
     /// <inheritdoc/>
-    public override string TitleForHeader(UITableView tableView, nint section)
+    public override string? TitleForHeader(UITableView tableView, nint section)
     {
         var header = _commonSource.SectionInfo[(int)section].Header;
         return header?.Title;
     }
 
     /// <inheritdoc/>
-    public override string TitleForFooter(UITableView tableView, nint section)
+    public override string? TitleForFooter(UITableView tableView, nint section)
     {
         var footer = _commonSource.SectionInfo[(int)section].Footer;
         return footer?.Title;
     }
 
     /// <inheritdoc/>
+    /// <remarks>
+    /// UIKit treats a null header view as "no custom header", but the binding declares the return
+    /// non-nullable, so the null is asserted here rather than fabricating an empty view.
+    /// </remarks>
     public override UIView GetViewForHeader(UITableView tableView, nint section)
     {
         var header = _commonSource.SectionInfo[(int)section].Header;
-        return header?.View?.Invoke();
+        return header?.View?.Invoke()!;
     }
 
     /// <inheritdoc/>
+    /// <remarks>
+    /// UIKit treats a null footer view as "no custom footer", but the binding declares the return
+    /// non-nullable, so the null is asserted here rather than fabricating an empty view.
+    /// </remarks>
     public override UIView GetViewForFooter(UITableView tableView, nint section)
     {
         var footer = _commonSource.SectionInfo[(int)section].Footer;
-        return footer?.View?.Invoke();
+        return footer?.View?.Invoke()!;
     }
 
-#pragma warning restore CS8603 // Possible null reference return.
-
-    /// <summary>
-    /// Items at.
-    /// </summary>
+    /// <summary>Items at.</summary>
     /// <param name="indexPath">The index path.</param>
     /// <returns>The item.</returns>
     public object? ItemAt(NSIndexPath indexPath)
@@ -289,13 +292,16 @@ public class ReactiveTableViewSource<TSource> : UITableViewSource, IReactiveNoti
     /// </summary>
     /// <returns>An object that, when disposed, re-enables change
     /// notifications.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public IDisposable SuppressChangeNotifications() => IReactiveObjectExtensions.SuppressChangeNotifications(this);
 
     /// <inheritdoc/>
-    void IReactiveObject.RaisePropertyChanging(PropertyChangingEventArgs args) => PropertyChanging?.Invoke(this, args);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    void IReactiveObject.RaisePropertyChanging(PropertyChangingEventArgs args) => _propertyChanging?.Invoke(this, args);
 
     /// <inheritdoc/>
-    void IReactiveObject.RaisePropertyChanged(PropertyChangedEventArgs args) => PropertyChanged?.Invoke(this, args);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    void IReactiveObject.RaisePropertyChanged(PropertyChangedEventArgs args) => _propertyChanged?.Invoke(this, args);
 
     /// <inheritdoc/>
     protected override void Dispose(bool disposing)

@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Autofac;
 using DryIoc;
 using Ninject;
+using ReactiveUI.Binding.ObservableForProperty;
 using ReactiveUI.Builder;
 using Splat;
 using Splat.Autofac;
@@ -15,164 +16,150 @@ using Splat.Ninject;
 
 namespace ReactiveUI.Splat.Tests;
 
-/// <summary>
-/// Tests for checking the splat adapters register ReactiveUI services.
-/// </summary>
+/// <summary>Tests for checking the splat adapters register ReactiveUI services.</summary>
 [NotInParallel] // These tests modify global state (Locator.CurrentMutable)
 public class SplatAdapterTests
 {
-    /// <summary>
-    /// Should register ReactiveUI binding type converters.
-    /// </summary>
+    /// <summary>Should expose Binding's converter service.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
-    public async Task DryIocDependencyResolver_Should_Register_ReactiveUI_BindingTypeConverters()
+    public async Task DryIocDependencyResolver_Should_Register_BindingConverterService()
     {
         // Invoke RxApp which initializes the ReactiveUI platform.
         var container = new Container();
         container.UseDryIocDependencyResolver();
-        Locator.CurrentMutable.CreateReactiveUIBuilder()
+        _ = Locator.CurrentMutable.CreateReactiveUIBuilder()
             .WithCoreServices()
             .Build();
 
-        var converters = container.Resolve<IEnumerable<IBindingTypeConverter>>().ToList();
+        var converters = container.Resolve<ConverterService>();
 
         await Assert.That(converters).IsNotNull();
         using (Assert.Multiple())
         {
-            await Assert.That(converters.Exists(static x => x is StringConverter)).IsTrue();
-            await Assert.That(converters.Exists(static x => x is EqualityTypeConverter)).IsTrue();
+            await Assert.That(converters.ResolveConverter(typeof(string), typeof(string)) is StringConverter).IsTrue();
+            await Assert.That(converters.ResolveConverter(typeof(object), typeof(bool)) is EqualityTypeConverter).IsTrue();
         }
     }
 
-    /// <summary>
-    /// Should register ReactiveUI creates command bindings.
-    /// </summary>
+    /// <summary>Should register Binding's runtime property observers.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
-    public async Task DryIocDependencyResolver_Should_Register_ReactiveUI_CreatesCommandBinding()
+    public async Task DryIocDependencyResolver_Should_Register_BindingPropertyObservers()
     {
         // Invoke RxApp which initializes the ReactiveUI platform.
         var container = new Container();
         container.UseDryIocDependencyResolver();
-        Locator.CurrentMutable.CreateReactiveUIBuilder()
+        _ = Locator.CurrentMutable.CreateReactiveUIBuilder()
             .WithCoreServices()
             .Build();
 
-        var converters = container.Resolve<IEnumerable<ICreatesCommandBinding>>().ToList();
+        var observers = container.Resolve<IEnumerable<ICreatesObservableForProperty>>().ToList();
 
-        await Assert.That(converters).IsNotNull();
+        await Assert.That(observers).IsNotNull();
         using (Assert.Multiple())
         {
-            await Assert.That(converters.Exists(static x => x is CreatesCommandBindingViaEvent))
+            await Assert.That(observers.Exists(static x => x is INPCObservableForProperty))
                 .IsTrue();
             await Assert
-                .That(converters.Exists(static x => x is CreatesCommandBindingViaCommandParameter))
+                .That(observers.Exists(static x => x is POCOObservableForProperty))
                 .IsTrue();
         }
     }
 
-    /// <summary>
-    /// Should register ReactiveUI binding type converters.
-    /// </summary>
+    /// <summary>Should expose Binding's converter service.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
-    public async Task AutofacDependencyResolver_Should_Register_ReactiveUI_BindingTypeConverters()
+    public async Task AutofacDependencyResolver_Should_Register_BindingConverterService()
     {
         // Invoke RxApp which initializes the ReactiveUI platform.
         var builder = new ContainerBuilder();
         var locator = new AutofacDependencyResolver(builder);
-        locator.CreateReactiveUIBuilder()
+        _ = locator.CreateReactiveUIBuilder()
             .WithCoreServices()
             .Build();
         var container = builder.Build();
 
-        var converters = container.Resolve<IEnumerable<IBindingTypeConverter>>().ToList();
+        var converters = container.Resolve<ConverterService>();
 
         await Assert.That(converters).IsNotNull();
         using (Assert.Multiple())
         {
-            await Assert.That(converters.Exists(static x => x is StringConverter)).IsTrue();
-            await Assert.That(converters.Exists(static x => x is EqualityTypeConverter)).IsTrue();
+            await Assert.That(converters.ResolveConverter(typeof(string), typeof(string)) is StringConverter).IsTrue();
+            await Assert.That(converters.ResolveConverter(typeof(object), typeof(bool)) is EqualityTypeConverter).IsTrue();
         }
     }
 
-    /// <summary>
-    /// Should register ReactiveUI creates command bindings.
-    /// </summary>
+    /// <summary>Should register Binding's runtime property observers.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
-    public async Task AutofacDependencyResolver_Should_Register_ReactiveUI_CreatesCommandBinding()
+    public async Task AutofacDependencyResolver_Should_Register_BindingPropertyObservers()
     {
         // Invoke RxApp which initializes the ReactiveUI platform.
         var builder = new ContainerBuilder();
         var locator = new AutofacDependencyResolver(builder);
-        locator.CreateReactiveUIBuilder()
+        _ = locator.CreateReactiveUIBuilder()
             .WithCoreServices()
             .Build();
         Locator.SetLocator(locator);
         var container = builder.Build();
 
-        var converters = container.Resolve<IEnumerable<ICreatesCommandBinding>>().ToList();
+        var observers = container.Resolve<IEnumerable<ICreatesObservableForProperty>>().ToList();
 
-        await Assert.That(converters).IsNotNull();
+        await Assert.That(observers).IsNotNull();
         using (Assert.Multiple())
         {
-            await Assert.That(converters.Exists(static x => x is CreatesCommandBindingViaEvent))
+            await Assert.That(observers.Exists(static x => x is INPCObservableForProperty))
                 .IsTrue();
             await Assert
-                .That(converters.Exists(static x => x is CreatesCommandBindingViaCommandParameter))
+                .That(observers.Exists(static x => x is POCOObservableForProperty))
                 .IsTrue();
         }
     }
 
-    /// <summary>
-    /// Should register ReactiveUI binding type converters.
-    /// </summary>
+    /// <summary>Should expose Binding's converter service.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
-    public async Task NinjectDependencyResolver_Should_Register_ReactiveUI_BindingTypeConverters()
+    public async Task NinjectDependencyResolver_Should_Register_BindingConverterService()
     {
         // Invoke RxApp which initializes the ReactiveUI platform.
         var container = new StandardKernel();
         container.UseNinjectDependencyResolver();
-        Locator.CurrentMutable.CreateReactiveUIBuilder()
+        _ = Locator.CurrentMutable.CreateReactiveUIBuilder()
             .WithCoreServices()
             .Build();
 
-        var converters = container.GetAll<IBindingTypeConverter>().ToList();
+        var converters = container.Get<ConverterService>();
 
         await Assert.That(converters).IsNotNull();
         using (Assert.Multiple())
         {
-            await Assert.That(converters.Exists(static x => x is StringConverter)).IsTrue();
-            await Assert.That(converters.Exists(static x => x is EqualityTypeConverter)).IsTrue();
+            await Assert.That(converters.ResolveConverter(typeof(string), typeof(string)) is StringConverter).IsTrue();
+            await Assert.That(converters.ResolveConverter(typeof(object), typeof(bool)) is EqualityTypeConverter).IsTrue();
         }
     }
 
-    /// <summary>
-    /// Should register ReactiveUI creates command bindings.
-    /// </summary>
+    /// <summary>Should register Binding's runtime property observers.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
-    public async Task NinjectDependencyResolver_Should_Register_ReactiveUI_CreatesCommandBinding()
+    public async Task NinjectDependencyResolver_Should_Register_BindingPropertyObservers()
     {
         // Invoke RxApp which initializes the ReactiveUI platform.
         var container = new StandardKernel();
         container.UseNinjectDependencyResolver();
-        Locator.CurrentMutable.CreateReactiveUIBuilder()
+        _ = Locator.CurrentMutable.CreateReactiveUIBuilder()
             .WithCoreServices()
             .Build();
 
-        var converters = container.GetAll<ICreatesCommandBinding>().ToList();
+        var observers = container.GetAll<ICreatesObservableForProperty>().ToList();
 
-        await Assert.That(converters).IsNotNull();
+        await Assert.That(observers).IsNotNull();
         using (Assert.Multiple())
         {
-            await Assert.That(converters.Exists(static x => x is CreatesCommandBindingViaEvent))
+            await Assert.That(observers.Exists(static x => x is INPCObservableForProperty))
                 .IsTrue();
             await Assert
-                .That(converters.Exists(static x => x is CreatesCommandBindingViaCommandParameter))
+                .That(observers.Exists(static x => x is POCOObservableForProperty))
                 .IsTrue();
         }
     }

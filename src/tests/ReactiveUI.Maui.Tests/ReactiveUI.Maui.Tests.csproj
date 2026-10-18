@@ -3,12 +3,17 @@
     <TargetFrameworks>$(ReactiveUIMauiTestTargets)</TargetFrameworks>
     <OutputType>Exe</OutputType>
     <UseMaui>true</UseMaui>
+    <IsTestProject>true</IsTestProject>
     <IsPackable>false</IsPackable>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\ReactiveUI.Maui\ReactiveUI.Maui.csproj"/>
     <ProjectReference Include="..\..\ReactiveUI\ReactiveUI.csproj"/>
     <ProjectReference Include="..\ReactiveUI.Test.Utilities\ReactiveUI.Test.Utilities.csproj"/>
+  </ItemGroup>
+  <ItemGroup>
+    <Using Include="ReactiveUI.Primitives" />
+    <Using Include="ReactiveUI.Primitives.Signals" />
   </ItemGroup>
 
   <PropertyGroup Condition="$(TargetFramework.Contains('-windows'))">

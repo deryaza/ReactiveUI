@@ -5,13 +5,16 @@
 
 using System.Collections.Specialized;
 using System.ComponentModel;
-using System.Reactive.Subjects;
+using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using Foundation;
-using ReactiveUI.Helpers;
 using UIKit;
 
+#if REACTIVE_SHIM
+namespace ReactiveUI.Reactive;
+#else
 namespace ReactiveUI;
-
+#endif
 /// <summary>
 /// ReactiveCollectionViewSource is a Collection View Source that is
 /// connected to a Read Only List that automatically updates the View based
@@ -19,17 +22,22 @@ namespace ReactiveUI;
 /// View items are animated in and out as items are added.
 /// </summary>
 /// <typeparam name="TSource">The source type.</typeparam>
+[DebuggerDisplay("{Data}")]
 public class ReactiveCollectionViewSource<TSource> : UICollectionViewSource, IReactiveNotifyPropertyChanged<ReactiveCollectionViewSource<TSource>>, IHandleObservableErrors, IReactiveObject
 {
     /// <summary>The common reactive source that manages section data and drives collection view updates.</summary>
     private readonly CommonReactiveSource<TSource, UICollectionView, UICollectionViewCell, CollectionViewSectionInformation<TSource>> _commonSource;
 
     /// <summary>The subject that publishes items whenever a collection view cell is selected.</summary>
-    private readonly Subject<object?> _elementSelected = new();
+    private readonly Signal<object?> _elementSelected = new();
 
-    /// <summary>
-    /// Initializes a new instance of the <see cref="ReactiveCollectionViewSource{TSource}"/> class.
-    /// </summary>
+    /// <summary>The <see cref="INotifyPropertyChanging.PropertyChanging"/> handlers; subscribing enables the classic event.</summary>
+    private PropertyChangingEventHandler? _propertyChanging;
+
+    /// <summary>The <see cref="INotifyPropertyChanged.PropertyChanged"/> handlers; subscribing enables the classic event.</summary>
+    private PropertyChangedEventHandler? _propertyChanged;
+
+    /// <summary>Initializes a new instance of the <see cref="ReactiveCollectionViewSource{TSource}"/> class.</summary>
     /// <param name="collectionView">The ui collection view.</param>
     /// <param name="collection">The notify collection changed.</param>
     /// <param name="cellKey">The cell key.</param>
@@ -38,9 +46,7 @@ public class ReactiveCollectionViewSource<TSource> : UICollectionViewSource, IRe
     {
     }
 
-    /// <summary>
-    /// Initializes a new instance of the <see cref="ReactiveCollectionViewSource{TSource}"/> class.
-    /// </summary>
+    /// <summary>Initializes a new instance of the <see cref="ReactiveCollectionViewSource{TSource}"/> class.</summary>
     /// <param name="collectionView">The ui collection view.</param>
     /// <param name="collection">The notify collection changed.</param>
     /// <param name="cellKey">The cell key.</param>
@@ -50,21 +56,37 @@ public class ReactiveCollectionViewSource<TSource> : UICollectionViewSource, IRe
         Data = [new CollectionViewSectionInformation<TSource, UICollectionViewCell>(collection, cellKey, initializeCellAction)
         ];
 
-    /// <summary>
-    /// Initializes a new instance of the <see cref="ReactiveCollectionViewSource{TSource}"/> class.
-    /// </summary>
+    /// <summary>Initializes a new instance of the <see cref="ReactiveCollectionViewSource{TSource}"/> class.</summary>
     /// <param name="collectionView">The ui collection view.</param>
     public ReactiveCollectionViewSource(UICollectionView collectionView)
     {
         var adapter = new UICollectionViewAdapter(collectionView);
-        _commonSource = new CommonReactiveSource<TSource, UICollectionView, UICollectionViewCell, CollectionViewSectionInformation<TSource>>(adapter);
+        _commonSource = new(adapter);
     }
 
     /// <inheritdoc/>
-    public event PropertyChangingEventHandler? PropertyChanging;
+    public event PropertyChangingEventHandler? PropertyChanging
+    {
+        add
+        {
+            this.SubscribePropertyChangingEvents();
+            _propertyChanging += value;
+        }
+
+        remove => _propertyChanging -= value;
+    }
 
     /// <inheritdoc/>
-    public event PropertyChangedEventHandler? PropertyChanged;
+    public event PropertyChangedEventHandler? PropertyChanged
+    {
+        add
+        {
+            this.SubscribePropertyChangedEvents();
+            _propertyChanged += value;
+        }
+
+        remove => _propertyChanged -= value;
+    }
 
     /// <summary>
     /// Gets or sets the data that should be displayed by this
@@ -90,20 +112,13 @@ public class ReactiveCollectionViewSource<TSource> : UICollectionViewSource, IRe
         }
     }
 
-    /// <summary>
-    /// Gets an IObservable that is a hook to <see cref="ItemSelected"/> calls.
-    /// </summary>
+    /// <summary>Gets an IObservable that is a hook to <see cref="ItemSelected"/> calls.</summary>
     public IObservable<object?> ElementSelected => _elementSelected;
 
-    /// <summary>
-    /// Gets an Observable that signals *before* a property is about to
-    /// be changed.
-    /// </summary>
+    /// <summary>Gets an Observable that signals *before* a property is about to be changed.</summary>
     public IObservable<IReactivePropertyChangedEventArgs<ReactiveCollectionViewSource<TSource>>> Changing => this.GetChangingObservable();
 
-    /// <summary>
-    /// Gets an Observable that signals *after* a property has changed.
-    /// </summary>
+    /// <summary>Gets an Observable that signals *after* a property has changed.</summary>
     public IObservable<IReactivePropertyChangedEventArgs<ReactiveCollectionViewSource<TSource>>> Changed => this.GetChangedObservable();
 
     /// <inheritdoc/>
@@ -131,9 +146,7 @@ public class ReactiveCollectionViewSource<TSource> : UICollectionViewSource, IRe
         _elementSelected.OnNext(_commonSource.ItemAt(indexPath));
     }
 
-    /// <summary>
-    /// Returns the Item at the specified index path.
-    /// </summary>
+    /// <summary>Returns the Item at the specified index path.</summary>
     /// <param name="indexPath">The index path.</param>
     /// <returns>The object at the specified index.</returns>
     public object? ItemAt(NSIndexPath indexPath)
@@ -144,10 +157,12 @@ public class ReactiveCollectionViewSource<TSource> : UICollectionViewSource, IRe
     }
 
     /// <inheritdoc/>
-    void IReactiveObject.RaisePropertyChanging(PropertyChangingEventArgs args) => PropertyChanging?.Invoke(this, args);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    void IReactiveObject.RaisePropertyChanging(PropertyChangingEventArgs args) => _propertyChanging?.Invoke(this, args);
 
     /// <inheritdoc/>
-    void IReactiveObject.RaisePropertyChanged(PropertyChangedEventArgs args) => PropertyChanged?.Invoke(this, args);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    void IReactiveObject.RaisePropertyChanged(PropertyChangedEventArgs args) => _propertyChanged?.Invoke(this, args);
 
     /// <summary>
     /// When this method is called, an object will not fire change
@@ -156,6 +171,7 @@ public class ReactiveCollectionViewSource<TSource> : UICollectionViewSource, IRe
     /// </summary>
     /// <returns>An object that, when disposed, re-enables change
     /// notifications.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public IDisposable SuppressChangeNotifications() => IReactiveObjectExtensions.SuppressChangeNotifications(this);
 
     /// <inheritdoc/>

@@ -7,22 +7,19 @@ using ReactiveUI.Builder;
 
 namespace ReactiveUI.Samples.Winforms;
 
-/// <summary>
-/// Application entry point demonstrating ReactiveUI builder initialization for WinForms.
-/// </summary>
+/// <summary>Application entry point demonstrating ReactiveUI builder initialization for WinForms.</summary>
 internal static class Program
 {
-    /// <summary>
-    /// The main entry point for the application.
-    /// </summary>
+    /// <summary>The main entry point for the application.</summary>
     [STAThread]
     private static void Main()
     {
-        RxAppBuilder.CreateReactiveUIBuilder()
+        ApplicationConfiguration.Initialize();
+
+        _ = RxAppBuilder.CreateReactiveUIBuilder()
             .WithWinForms()
             .BuildApp();
 
-        ApplicationConfiguration.Initialize();
         Application.Run(new MainForm());
     }
 }

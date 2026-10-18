@@ -4,10 +4,8 @@
 // See the LICENSE file in the project root for full license information.
 
 using System.ComponentModel;
-using System.Diagnostics.CodeAnalysis;
-using System.Reactive;
-using System.Reactive.Concurrency;
-using System.Reactive.Subjects;
+using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using CoreGraphics;
 using Foundation;
 
@@ -19,57 +17,57 @@ using AppKit;
 using UIControl = AppKit.NSControl;
 #endif
 
+#if REACTIVE_SHIM
+namespace ReactiveUI.Reactive;
+#else
 namespace ReactiveUI;
-
+#endif
 /// <summary>
 /// This is a UIControl that is both and UIControl and has a ReactiveObject powers
 /// (i.e. you can call RaiseAndSetIfChanged).
 /// </summary>
+[DebuggerDisplay("{Activated}, {Deactivated}")]
 public class ReactiveControl : UIControl, IReactiveNotifyPropertyChanged<ReactiveControl>, IHandleObservableErrors, IReactiveObject, ICanActivate, ICanForceManualActivation
 {
     /// <summary>The subject that emits when the control is deactivated (removed from its superview).</summary>
-    private readonly Subject<Unit> _deactivated = new();
+    private readonly Signal<RxVoid> _deactivated = new();
 
     /// <summary>The subject that emits when the control is activated (added to a superview).</summary>
-    private readonly Subject<Unit> _activated = new();
+    private readonly Signal<RxVoid> _activated = new();
 
-    /// <summary>
-    /// Initializes a new instance of the <see cref="ReactiveControl"/> class.
-    /// </summary>
+    /// <summary>The <see cref="INotifyPropertyChanging.PropertyChanging"/> handlers; subscribing enables the classic event.</summary>
+    private PropertyChangingEventHandler? _propertyChanging;
+
+    /// <summary>The <see cref="INotifyPropertyChanged.PropertyChanged"/> handlers; subscribing enables the classic event.</summary>
+    private PropertyChangedEventHandler? _propertyChanged;
+
+    /// <summary>Initializes a new instance of the <see cref="ReactiveControl"/> class.</summary>
     protected ReactiveControl()
     {
     }
 
-    /// <summary>
-    /// Initializes a new instance of the <see cref="ReactiveControl"/> class.
-    /// </summary>
+    /// <summary>Initializes a new instance of the <see cref="ReactiveControl"/> class.</summary>
     /// <param name="c">The c.</param>
     protected ReactiveControl(NSCoder c)
         : base(c)
     {
     }
 
-    /// <summary>
-    /// Initializes a new instance of the <see cref="ReactiveControl"/> class.
-    /// </summary>
+    /// <summary>Initializes a new instance of the <see cref="ReactiveControl"/> class.</summary>
     /// <param name="f">The f.</param>
     protected ReactiveControl(NSObjectFlag f)
         : base(f)
     {
     }
 
-    /// <summary>
-    /// Initializes a new instance of the <see cref="ReactiveControl"/> class.
-    /// </summary>
+    /// <summary>Initializes a new instance of the <see cref="ReactiveControl"/> class.</summary>
     /// <param name="frame">The frame.</param>
     protected ReactiveControl(CGRect frame)
         : base(frame)
     {
     }
 
-    /// <summary>
-    /// Initializes a new instance of the <see cref="ReactiveControl"/> class.
-    /// </summary>
+    /// <summary>Initializes a new instance of the <see cref="ReactiveControl"/> class.</summary>
     /// <param name="handle">The handle.</param>
     protected ReactiveControl(in IntPtr handle)
         : base(handle)
@@ -77,10 +75,28 @@ public class ReactiveControl : UIControl, IReactiveNotifyPropertyChanged<Reactiv
     }
 
     /// <inheritdoc/>
-    public event PropertyChangingEventHandler? PropertyChanging;
+    public event PropertyChangingEventHandler? PropertyChanging
+    {
+        add
+        {
+            this.SubscribePropertyChangingEvents();
+            _propertyChanging += value;
+        }
+
+        remove => _propertyChanging -= value;
+    }
 
     /// <inheritdoc/>
-    public event PropertyChangedEventHandler? PropertyChanged;
+    public event PropertyChangedEventHandler? PropertyChanged
+    {
+        add
+        {
+            this.SubscribePropertyChangedEvents();
+            _propertyChanged += value;
+        }
+
+        remove => _propertyChanged -= value;
+    }
 
     /// <inheritdoc />
     public IObservable<IReactivePropertyChangedEventArgs<ReactiveControl>> Changing => this.GetChangingObservable();
@@ -92,48 +108,52 @@ public class ReactiveControl : UIControl, IReactiveNotifyPropertyChanged<Reactiv
     public IObservable<Exception> ThrownExceptions => this.GetThrownExceptionsObservable();
 
 #if MAC
-    /// <summary>
-    /// Gets a observable when the control is activated.
-    /// </summary>
-    public new IObservable<Unit> Activated => _activated;
+    /// <summary>Gets a observable when the control is activated.</summary>
+    public new IObservable<RxVoid> Activated => _activated;
 #else
-    /// <summary>
-    /// Gets a observable when the control is activated.
-    /// </summary>
-    public IObservable<Unit> Activated => _activated;
+    /// <summary>Gets a observable when the control is activated.</summary>
+    public IObservable<RxVoid> Activated => _activated;
 #endif
 
-    /// <summary>
-    /// Gets a observable that occurs when the control is deactivated.
-    /// </summary>
-    public IObservable<Unit> Deactivated => _deactivated;
+    /// <summary>Gets a observable that occurs when the control is deactivated.</summary>
+    public IObservable<RxVoid> Deactivated => _deactivated;
 
 #if UIKIT
     /// <inheritdoc/>
     public override void WillMoveToSuperview(UIView? newsuper)
 #else
     /// <inheritdoc/>
-    public override void ViewWillMoveToSuperview(NSView? newsuper)
+    public override void ViewWillMoveToSuperview(NSView? newSuperview)
 #endif
     {
+        // A platform callback that arrives after Dispose does nothing.
+        if (_activated.IsDisposed)
+        {
+            return;
+        }
+
 #if UIKIT
         base.WillMoveToSuperview(newsuper);
+        var superview = newsuper;
 #else
-        base.ViewWillMoveToSuperview(newsuper);
+        base.ViewWillMoveToSuperview(newSuperview);
+        var superview = newSuperview;
 #endif
-        (newsuper is not null ? _activated : _deactivated).OnNext(Unit.Default);
+        (superview is not null ? _activated : _deactivated).OnNext(RxVoid.Default);
     }
 
     /// <inheritdoc/>
-    void ICanForceManualActivation.Activate(bool shouldActivate) =>
-        RxSchedulers.MainThreadScheduler.Schedule(() =>
-            (shouldActivate ? _activated : _deactivated).OnNext(Unit.Default));
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    void ICanForceManualActivation.Activate(bool isActivating) =>
+        ActivationSignals.ScheduleActivation(isActivating, _activated, _deactivated);
 
     /// <inheritdoc/>
-    void IReactiveObject.RaisePropertyChanging(PropertyChangingEventArgs args) => PropertyChanging?.Invoke(this, args);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    void IReactiveObject.RaisePropertyChanging(PropertyChangingEventArgs args) => _propertyChanging?.Invoke(this, args);
 
     /// <inheritdoc/>
-    void IReactiveObject.RaisePropertyChanged(PropertyChangedEventArgs args) => PropertyChanged?.Invoke(this, args);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    void IReactiveObject.RaisePropertyChanged(PropertyChangedEventArgs args) => _propertyChanged?.Invoke(this, args);
 
     /// <summary>
     /// When this method is called, an object will not fire change
@@ -142,87 +162,13 @@ public class ReactiveControl : UIControl, IReactiveNotifyPropertyChanged<Reactiv
     /// </summary>
     /// <returns>An object that, when disposed, reenables change
     /// notifications.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public IDisposable SuppressChangeNotifications() => IReactiveObjectExtensions.SuppressChangeNotifications(this);
 
     /// <inheritdoc/>
     protected override void Dispose(bool disposing)
     {
-        if (disposing)
-        {
-            _activated?.Dispose();
-            _deactivated?.Dispose();
-        }
-
+        ActivationSignals.DisposeWhen(disposing, _activated, _deactivated);
         base.Dispose(disposing);
-    }
-}
-
-/// <summary>
-/// This is a UIControl that is both and UIControl and has a ReactiveObject powers
-/// (i.e. you can call RaiseAndSetIfChanged).
-/// </summary>
-/// <typeparam name="TViewModel">The view model type.</typeparam>
-[SuppressMessage("StyleCop.CSharp.MaintainabilityRules", "SA1402:FileMayOnlyContainASingleType", Justification = "Classes with the same class names within.")]
-public abstract class ReactiveControl<TViewModel> : ReactiveControl, IViewFor<TViewModel>
-    where TViewModel : class
-{
-    /// <summary>The backing field for the <see cref="ViewModel"/> property.</summary>
-    private TViewModel? _viewModel;
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="ReactiveControl{TViewModel}"/> class.
-    /// </summary>
-    protected ReactiveControl()
-    {
-    }
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="ReactiveControl{TViewModel}"/> class.
-    /// </summary>
-    /// <param name="c">The coder.</param>
-    protected ReactiveControl(NSCoder c)
-        : base(c)
-    {
-    }
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="ReactiveControl{TViewModel}"/> class.
-    /// </summary>
-    /// <param name="f">The object flag.</param>
-    protected ReactiveControl(NSObjectFlag f)
-        : base(f)
-    {
-    }
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="ReactiveControl{TViewModel}"/> class.
-    /// </summary>
-    /// <param name="handle">The pointer handle.</param>
-    protected ReactiveControl(in IntPtr handle)
-        : base(handle)
-    {
-    }
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="ReactiveControl{TViewModel}"/> class.
-    /// </summary>
-    /// <param name="frame">The frame.</param>
-    protected ReactiveControl(CGRect frame)
-        : base(frame)
-    {
-    }
-
-    /// <inheritdoc/>
-    public TViewModel? ViewModel
-    {
-        get => _viewModel;
-        set => this.RaiseAndSetIfChanged(ref _viewModel, value);
-    }
-
-    /// <inheritdoc/>
-    object? IViewFor.ViewModel
-    {
-        get => ViewModel;
-        set => ViewModel = (TViewModel)value!;
     }
 }

@@ -5,20 +5,20 @@
 
 namespace ReactiveUI.Tests.Wpf.Mocks.CanExecuteMock;
 
-/// <summary>
-/// Interaction logic for CommandBindingView.xaml.
-/// </summary>
+/// <summary>Interaction logic for CommandBindingView.xaml.</summary>
 [ExcludeFromViewRegistration]
 public partial class CanExecuteExecutingView
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="CanExecuteExecutingView"/> class.
-    /// </summary>
+    /// <summary>Initializes a new instance of the <see cref="CanExecuteExecutingView"/> class.</summary>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage(
+        "Design",
+        "SST2403:Do not let 'this' escape from a constructor",
+        Justification = "WhenActivated requires 'this' during view construction; single-threaded test fixture.")]
     public CanExecuteExecutingView()
     {
         InitializeComponent();
         ViewModel = new();
-        this.WhenActivated(d =>
+        _ = this.WhenActivated(d =>
         {
             d(this.BindCommand(ViewModel, vm => vm.Command3, v => v.Execute));
             d(this.OneWayBind(ViewModel, vm => vm.Result, v => v.Result.Text));

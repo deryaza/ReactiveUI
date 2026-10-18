@@ -3,7 +3,11 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
 
+#if REACTIVE_SHIM
+using ReactiveUI.Reactive.Builder;
+#else
 using ReactiveUI.Builder;
+#endif
 using TUnit.Core.Interfaces;
 
 namespace ReactiveUI.Tests.Utilities.AppBuilder;
@@ -21,24 +25,22 @@ namespace ReactiveUI.Tests.Utilities.AppBuilder;
 /// <item><description>Customizable AppBuilder configuration via virtual method</description></item>
 /// </list>
 /// </remarks>
-public abstract class BaseAppBuilderTestExecutor : ITestExecutor
+public class BaseAppBuilderTestExecutor : ITestExecutor
 {
-    /// <summary>
-    ///     The helper that manages AppBuilder lifecycle for the test.
-    /// </summary>
+    /// <summary>The helper that manages AppBuilder lifecycle for the test.</summary>
     private readonly AppBuilderTestHelper _helper = new();
 
     /// <inheritdoc />
-    public virtual async ValueTask ExecuteTest(TestContext context, Func<ValueTask> testAction)
+    public virtual async ValueTask ExecuteTest(TestContext context, Func<ValueTask> action)
     {
-        ArgumentNullException.ThrowIfNull(testAction);
+        ArgumentNullException.ThrowIfNull(action);
 
         _helper.Initialize(builder => ConfigureAppBuilder(builder, context));
 
         try
         {
             // Execute actual test
-            await testAction();
+            await action();
         }
         finally
         {
@@ -62,6 +64,6 @@ public abstract class BaseAppBuilderTestExecutor : ITestExecutor
         ArgumentNullException.ThrowIfNull(context);
 
         // Default implementation: just register core services
-        builder.WithCoreServices();
+        _ = builder.WithCoreServices();
     }
 }

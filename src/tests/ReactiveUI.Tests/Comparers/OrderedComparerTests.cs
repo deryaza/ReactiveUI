@@ -7,14 +7,16 @@ using System.Diagnostics;
 
 namespace ReactiveUI.Tests.Comparers;
 
-/// <summary>
-/// Tests for the <see cref="OrderedComparer{T}" /> functionality.
-/// </summary>
+/// <summary>Tests for the <see cref="OrderedComparer{T}" /> functionality.</summary>
 public class OrderedComparerTests
 {
-    /// <summary>
-    ///     Test for checking that chaining the onto regular IComparable works.
-    /// </summary>
+    /// <summary>The salary shared by Alice, Carol, and Xavier used to exercise tie-breaking by name.</summary>
+    private const int TiedSalary = 100;
+
+    /// <summary>The age shared by Carol and Xavier used to exercise tie-breaking by salary.</summary>
+    private const int TiedAge = 35;
+
+    /// <summary>Test for checking that chaining the onto regular IComparable works.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task ChainOntoRegularIComparables()
@@ -29,9 +31,7 @@ public class OrderedComparerTests
         await Assert.That(items.SequenceEqual(["aaa", "AAA", "aaaa", "abb"], StringComparer.Ordinal)).IsTrue();
     }
 
-    /// <summary>
-    ///     A test which determines if customer comparers work.
-    /// </summary>
+    /// <summary>A test which determines if customer comparers work.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task CustomComparerTest()
@@ -54,27 +54,24 @@ public class OrderedComparerTests
         await Assert.That(items.SequenceEqual(["AAA", "AAA", "abb", "aaaa"], StringComparer.OrdinalIgnoreCase)).IsTrue();
     }
 
-    /// <summary>
-    ///     A general smoke test.
-    /// </summary>
+    /// <summary>A general smoke test.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task SmokeTest()
     {
-        var adam = new Employee { Name = "Adam", Age = 50, Salary = 125 };
-        var alice = new Employee { Name = "Alice", Age = 25, Salary = 100 };
-        var bob = new Employee { Name = "Bob", Age = 30, Salary = 75 };
-        var carol = new Employee { Name = "Carol", Age = 35, Salary = 100 };
-        var xavier = new Employee { Name = "Xavier", Age = 35, Salary = 100 };
+        const int AdamAge = 50;
+        const int AdamSalary = 125;
+        const int AliceAge = 25;
+        const int BobAge = 30;
+        const int BobSalary = 75;
 
-        var employees = new List<Employee>
-        {
-            adam,
-            alice,
-            bob,
-            carol,
-            xavier
-        };
+        var adam = new Employee { Name = "Adam", Age = AdamAge, Salary = AdamSalary };
+        var alice = new Employee { Name = "Alice", Age = AliceAge, Salary = TiedSalary };
+        var bob = new Employee { Name = "Bob", Age = BobAge, Salary = BobSalary };
+        var carol = new Employee { Name = "Carol", Age = TiedAge, Salary = TiedSalary };
+        var xavier = new Employee { Name = "Xavier", Age = TiedAge, Salary = TiedSalary };
+
+        var employees = new List<Employee> { adam, alice, bob, carol, xavier };
 
         employees.Sort(OrderedComparer<Employee>.OrderBy(static x => x.Name));
         await Assert.That(employees.SequenceEqual([adam, alice, bob, carol, xavier])).IsTrue();
@@ -95,39 +92,29 @@ public class OrderedComparerTests
         await Assert.That(employees.SequenceEqual([adam, carol, xavier, bob, alice])).IsTrue();
     }
 
-    /// <summary>
-    ///     Test that checks it works with anonymous types.
-    /// </summary>
+    /// <summary>Test that checks it works with anonymous types.</summary>
     /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
     [Test]
     public async Task WorksWithAnonymousTypes()
     {
         var source = new List<string> { "abc", "bcd", "cde" };
-        var items = source.ConvertAll(static x => new { FirstLetter = x[0], AllOfIt = x });
+        var items = source.ConvertAll(static x => (FirstLetter: x[0], AllOfIt: x));
 
         items.Sort(OrderedComparer.For(items).OrderBy(static x => x.FirstLetter));
         await Assert.That(items.Select(static x => x.FirstLetter).SequenceEqual("abc")).IsTrue();
     }
 
-    /// <summary>
-    /// A sample employee record used as test data for sorting.
-    /// </summary>
+    /// <summary>A sample employee record used as test data for sorting.</summary>
     [DebuggerDisplay("{Name}")]
     private sealed class Employee
     {
-        /// <summary>
-        /// Gets the age of the employee.
-        /// </summary>
+        /// <summary>Gets the age of the employee.</summary>
         public int Age { get; init; }
 
-        /// <summary>
-        /// Gets the name of the employee.
-        /// </summary>
+        /// <summary>Gets the name of the employee.</summary>
         public string? Name { get; init; }
 
-        /// <summary>
-        /// Gets the salary of the employee.
-        /// </summary>
+        /// <summary>Gets the salary of the employee.</summary>
         public int Salary { get; init; }
     }
 }

@@ -4,46 +4,42 @@
 // See the LICENSE file in the project root for full license information.
 
 using System.ComponentModel;
-using System.Reactive;
+using System.Runtime.CompilerServices;
 using Android.Content;
 using Android.Runtime;
 using AndroidX.AppCompat.App;
-using ReactiveUI.Internal;
 
+#if REACTIVE_SHIM
+namespace ReactiveUI.Reactive.AndroidX;
+#else
 namespace ReactiveUI.AndroidX;
-
-/// <summary>
-/// This is an Activity that is both an Activity and has ReactiveObject powers
-/// (i.e. you can call RaiseAndSetIfChanged).
-/// </summary>
+#endif
+/// <summary>This is an Activity that is both an Activity and has ReactiveObject powers (i.e. you can call RaiseAndSetIfChanged).</summary>
+[System.Diagnostics.DebuggerDisplay("{Activated}, {Deactivated}")]
 public class ReactiveAppCompatActivity : AppCompatActivity, IReactiveObject,
     IReactiveNotifyPropertyChanged<ReactiveAppCompatActivity>, IHandleObservableErrors
 {
-    /// <summary>
-    /// The subject that signals when the activity is activated.
-    /// </summary>
-    private readonly BroadcastSubject<Unit> _activated = new();
+    /// <summary>The subject that signals when the activity is activated.</summary>
+    private readonly Signal<RxVoid> _activated = new();
 
-    /// <summary>
-    /// The subject that signals when the activity is deactivated.
-    /// </summary>
-    private readonly BroadcastSubject<Unit> _deactivated = new();
+    /// <summary>The subject that signals when the activity is deactivated.</summary>
+    private readonly Signal<RxVoid> _deactivated = new();
 
-    /// <summary>
-    /// The subject that signals activity results.
-    /// </summary>
-    private readonly BroadcastSubject<(int requestCode, Result result, Intent? intent)> _activityResult = new();
+    /// <summary>The subject that signals activity results.</summary>
+    private readonly Signal<(int RequestCode, Result Result, Intent? Intent)> _activityResult = new();
 
-    /// <summary>
-    /// Initializes a new instance of the <see cref="ReactiveAppCompatActivity" /> class.
-    /// </summary>
+    /// <summary>The <see cref="INotifyPropertyChanging.PropertyChanging"/> handlers; subscribing enables the classic event.</summary>
+    private PropertyChangingEventHandler? _propertyChanging;
+
+    /// <summary>The <see cref="INotifyPropertyChanged.PropertyChanged"/> handlers; subscribing enables the classic event.</summary>
+    private PropertyChangedEventHandler? _propertyChanged;
+
+    /// <summary>Initializes a new instance of the <see cref="ReactiveAppCompatActivity" /> class.</summary>
     protected ReactiveAppCompatActivity()
     {
     }
 
-    /// <summary>
-    /// Initializes a new instance of the <see cref="ReactiveAppCompatActivity" /> class.
-    /// </summary>
+    /// <summary>Initializes a new instance of the <see cref="ReactiveAppCompatActivity" /> class.</summary>
     /// <param name="handle">The handle.</param>
     /// <param name="ownership">The ownership.</param>
     protected ReactiveAppCompatActivity(in IntPtr handle, JniHandleOwnership ownership)
@@ -52,10 +48,28 @@ public class ReactiveAppCompatActivity : AppCompatActivity, IReactiveObject,
     }
 
     /// <inheritdoc/>
-    public event PropertyChangingEventHandler? PropertyChanging;
+    public event PropertyChangingEventHandler? PropertyChanging
+    {
+        add
+        {
+            this.SubscribePropertyChangingEvents();
+            _propertyChanging += value;
+        }
+
+        remove => _propertyChanging -= value;
+    }
 
     /// <inheritdoc/>
-    public event PropertyChangedEventHandler? PropertyChanged;
+    public event PropertyChangedEventHandler? PropertyChanged
+    {
+        add
+        {
+            this.SubscribePropertyChangedEvents();
+            _propertyChanged += value;
+        }
+
+        remove => _propertyChanged -= value;
+    }
 
     /// <inheritdoc/>
     public IObservable<IReactivePropertyChangedEventArgs<ReactiveAppCompatActivity>> Changing =>
@@ -68,84 +82,65 @@ public class ReactiveAppCompatActivity : AppCompatActivity, IReactiveObject,
     /// <inheritdoc/>
     public IObservable<Exception> ThrownExceptions => this.GetThrownExceptionsObservable();
 
-    /// <summary>
-    /// Gets a signal when activated.
-    /// </summary>
+    /// <summary>Gets a signal when activated.</summary>
     /// <value>
     /// The activated.
     /// </value>
-    public IObservable<Unit> Activated => _activated;
+    public IObservable<RxVoid> Activated => _activated;
 
-    /// <summary>
-    /// Gets a signal when deactivated.
-    /// </summary>
+    /// <summary>Gets a signal when deactivated.</summary>
     /// <value>
     /// The deactivated.
     /// </value>
-    public IObservable<Unit> Deactivated => _deactivated;
+    public IObservable<RxVoid> Deactivated => _deactivated;
 
-    /// <summary>
-    /// Gets the activity result.
-    /// </summary>
+    /// <summary>Gets the activity result.</summary>
     /// <value>
     /// The activity result.
     /// </value>
-    public IObservable<(int requestCode, Result result, Intent? intent)> ActivityResult =>
+    public IObservable<(int RequestCode, Result Result, Intent? Intent)> ActivityResult =>
         _activityResult;
 
     /// <inheritdoc/>
-    void IReactiveObject.RaisePropertyChanging(PropertyChangingEventArgs args) => PropertyChanging?.Invoke(this, args);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    void IReactiveObject.RaisePropertyChanging(PropertyChangingEventArgs args) => _propertyChanging?.Invoke(this, args);
 
     /// <inheritdoc/>
-    void IReactiveObject.RaisePropertyChanged(PropertyChangedEventArgs args) => PropertyChanged?.Invoke(this, args);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    void IReactiveObject.RaisePropertyChanged(PropertyChangedEventArgs args) => _propertyChanged?.Invoke(this, args);
 
     /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public IDisposable SuppressChangeNotifications() => IReactiveObjectExtensions.SuppressChangeNotifications(this);
 
-    /// <summary>
-    /// Starts the activity for result asynchronously.
-    /// </summary>
+    /// <summary>Starts the activity for result asynchronously.</summary>
     /// <param name="intent">The intent.</param>
     /// <param name="requestCode">The request code.</param>
     /// <returns>A task with the result and intent.</returns>
-    public Task<(Result result, Intent? intent)> StartActivityForResultAsync(Intent intent, int requestCode)
-    {
-        // NB: It's important that we set up the subscription *before* we
-        // call ActivityForResult
-        var ret = ActivityResultAwaiter.Await(ActivityResult, requestCode);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public Task<(Result Result, Intent? Intent)> StartActivityForResultAsync(Intent intent, int requestCode) =>
+        ActivityResultAwaiter.StartForResultAsync(this, ActivityResult, intent, requestCode);
 
-        StartActivityForResult(intent, requestCode);
-        return ret;
-    }
-
-    /// <summary>
-    /// Starts the activity for result asynchronously.
-    /// </summary>
+    /// <summary>Starts the activity for result asynchronously.</summary>
     /// <param name="type">The type.</param>
     /// <param name="requestCode">The request code.</param>
     /// <returns>A task with the result and intent.</returns>
-    public Task<(Result result, Intent? intent)> StartActivityForResultAsync(Type type, int requestCode)
-    {
-        // NB: It's important that we set up the subscription *before* we
-        // call ActivityForResult
-        var ret = ActivityResultAwaiter.Await(ActivityResult, requestCode);
-
-        StartActivityForResult(type, requestCode);
-        return ret;
-    }
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public Task<(Result Result, Intent? Intent)> StartActivityForResultAsync(Type type, int requestCode) =>
+        ActivityResultAwaiter.StartForResultAsync(this, ActivityResult, type, requestCode);
 
     /// <inheritdoc/>
     protected override void OnPause()
     {
         base.OnPause();
-        _deactivated.OnNext(Unit.Default);
+        ActivationSignals.Raise(_deactivated);
     }
 
     /// <inheritdoc/>
     protected override void OnResume()
     {
         base.OnResume();
-        _activated.OnNext(Unit.Default);
+        ActivationSignals.Raise(_activated);
     }
 
     /// <inheritdoc/>
@@ -158,90 +153,7 @@ public class ReactiveAppCompatActivity : AppCompatActivity, IReactiveObject,
     /// <inheritdoc/>
     protected override void Dispose(bool disposing)
     {
-        if (disposing)
-        {
-            _activated.Dispose();
-            _deactivated.Dispose();
-            _activityResult.Dispose();
-        }
-
+        ActivationSignals.DisposeWhen(disposing, _activated, _deactivated, _activityResult);
         base.Dispose(disposing);
-    }
-
-    /// <summary>
-    /// Awaits the first <see cref="ActivityResult"/> that matches a request code, then completes the task and
-    /// detaches. A fused, allocation-light replacement for <c>Where(...).Select(...).FirstAsync().ToTask()</c>:
-    /// it is its own observer, settles exactly once, and unsubscribes on completion.
-    /// </summary>
-    private sealed class ActivityResultAwaiter
-        : IObserver<(int requestCode, Result result, Intent? intent)>, IDisposable
-    {
-        /// <summary>The request code this awaiter is waiting for.</summary>
-        private readonly int _requestCode;
-
-        /// <summary>Completion source backing the returned task.</summary>
-        private readonly TaskCompletionSource<(Result result, Intent? intent)> _completion = new();
-
-        /// <summary>Holds the source subscription so it can be torn down once settled.</summary>
-        private readonly OnceDisposable _subscription = new();
-
-        /// <summary>Guards against settling more than once.</summary>
-        private int _settled;
-
-        /// <summary>Initializes a new instance of the <see cref="ActivityResultAwaiter"/> class.</summary>
-        /// <param name="requestCode">The request code to await.</param>
-        private ActivityResultAwaiter(int requestCode) => _requestCode = requestCode;
-
-        /// <summary>Subscribes to the activity-result stream and returns a task for the first matching result.</summary>
-        /// <param name="source">The activity-result stream.</param>
-        /// <param name="requestCode">The request code to await.</param>
-        /// <returns>A task that completes with the result and intent of the first matching activity result.</returns>
-        public static Task<(Result result, Intent? intent)> Await(
-            IObservable<(int requestCode, Result result, Intent? intent)> source,
-            int requestCode)
-        {
-            var awaiter = new ActivityResultAwaiter(requestCode);
-            awaiter._subscription.Disposable = source.Subscribe(awaiter);
-            return awaiter._completion.Task;
-        }
-
-        /// <inheritdoc/>
-        public void OnNext((int requestCode, Result result, Intent? intent) value)
-        {
-            if (value.requestCode != _requestCode || Interlocked.Exchange(ref _settled, 1) != 0)
-            {
-                return;
-            }
-
-            _completion.TrySetResult((value.result, value.intent));
-            Dispose();
-        }
-
-        /// <inheritdoc/>
-        public void OnError(Exception error)
-        {
-            if (Interlocked.Exchange(ref _settled, 1) != 0)
-            {
-                return;
-            }
-
-            _completion.TrySetException(error);
-            Dispose();
-        }
-
-        /// <inheritdoc/>
-        public void OnCompleted()
-        {
-            if (Interlocked.Exchange(ref _settled, 1) != 0)
-            {
-                return;
-            }
-
-            _completion.TrySetCanceled();
-            Dispose();
-        }
-
-        /// <inheritdoc/>
-        public void Dispose() => _subscription.Dispose();
     }
 }

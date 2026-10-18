@@ -3,39 +3,24 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
 
-using System.Reactive.Concurrency;
-using System.Reactive.Disposables;
-using System.Reactive.Disposables.Fluent;
-using System.Reactive.Linq;
-using System.Reactive.Subjects;
 using Splat;
 
 namespace ReactiveUI.AOT.Tests;
 
-/// <summary>
-/// Tests for testing the AOT and making sure trimming is correct.
-/// </summary>
+/// <summary>Tests for testing the AOT and making sure trimming is correct.</summary>
 [NotInParallel]
 public class ComprehensiveAOTMarkupTests
 {
-    /// <summary>
-    /// The initial value used when constructing reactive properties under test.
-    /// </summary>
+    /// <summary>The initial value used when constructing reactive properties under test.</summary>
     private const string InitialValue = "initial";
 
-    /// <summary>
-    /// The updated value assigned to reactive properties during the workflow tests.
-    /// </summary>
+    /// <summary>The updated value assigned to reactive properties during the workflow tests.</summary>
     private const string UpdatedValue = "updated";
 
-    /// <summary>
-    /// The expected count or activation total used in assertions.
-    /// </summary>
+    /// <summary>The expected count or activation total used in assertions.</summary>
     private const int ExpectedCount = 2;
 
-    /// <summary>
-    /// Tests that ReactiveObject constructor works with AOT suppression.
-    /// </summary>
+    /// <summary>Tests that ReactiveObject constructor works with AOT suppression.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     public async Task ReactiveObject_Constructor_WorksWithAOTSuppression()
@@ -53,18 +38,15 @@ public class ComprehensiveAOTMarkupTests
         }
     }
 
-    /// <summary>
-    /// Tests that ReactiveProperty Refresh method works with AOT suppression.
-    /// </summary>
+    /// <summary>Tests that ReactiveProperty Refresh method works with AOT suppression.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     public async Task ReactiveProperty_Refresh_WorksWithAOTSuppression()
     {
-        var scheduler = CurrentThreadScheduler.Instance;
-        var property = new ReactiveProperty<string>(InitialValue, scheduler, false, false);
+        var property = new ReactiveProperty<string>(InitialValue, Sequencer.CurrentThread, false, false);
         var values = new List<string>();
 
-        property.Subscribe(value => values.Add(value ?? string.Empty));
+        _ = property.Subscribe(value => values.Add(value ?? string.Empty));
 
         property.Refresh(); // This calls RaisePropertyChanged which has AOT attributes
 
@@ -85,8 +67,7 @@ public class ComprehensiveAOTMarkupTests
         // This test validates that platform-specific code has AOT attributes
         // We can't directly test Android code in this context, but we can verify
         // that the patterns we expect are working
-        var testScheduler = CurrentThreadScheduler.Instance;
-        var property = new ReactiveProperty<string>("test", testScheduler, false, false);
+        var property = new ReactiveProperty<string>("test", Sequencer.CurrentThread, false, false);
 
         // Test that basic ReactiveUI functionality works
         await Assert.That(property.Value).IsEqualTo("test");
@@ -94,19 +75,16 @@ public class ComprehensiveAOTMarkupTests
         property.Dispose();
     }
 
-    /// <summary>
-    /// Tests that all reactive property operations work with proper AOT handling.
-    /// </summary>
+    /// <summary>Tests that all reactive property operations work with proper AOT handling.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     public async Task ReactiveProperty_ComprehensiveOperations_WorkWithAOT()
     {
-        var scheduler = CurrentThreadScheduler.Instance;
-        var property = new ReactiveProperty<string>(InitialValue, scheduler, false, false);
+        var property = new ReactiveProperty<string>(InitialValue, Sequencer.CurrentThread, false, false);
 
         // Test basic operations
         var valueChanges = new List<string>();
-        property.Subscribe(value => valueChanges.Add(value ?? string.Empty));
+        _ = property.Subscribe(value => valueChanges.Add(value ?? string.Empty));
 
         // Test value setting (uses RaisePropertyChanged)
         property.Value = "changed";
@@ -116,9 +94,9 @@ public class ComprehensiveAOTMarkupTests
 
         // Test validation
         var hasErrors = false;
-        property.ObserveHasErrors.Subscribe(errors => hasErrors = errors);
+        _ = property.ObserveHasErrors.Subscribe(errors => hasErrors = errors);
 
-        _ = property.AddValidationError(x => string.IsNullOrEmpty(x) ? "Required" : null);
+        _ = property.AddValidationError(static x => string.IsNullOrEmpty(x) ? "Required" : null);
         property.Value = string.Empty;
 
         await Assert.That(valueChanges).Contains(InitialValue);
@@ -131,17 +109,15 @@ public class ComprehensiveAOTMarkupTests
         property.Dispose();
     }
 
-    /// <summary>
-    /// Tests that complex ReactiveUI scenarios work with mixed AOT compatible and incompatible features.
-    /// </summary>
+    /// <summary>Tests that complex ReactiveUI scenarios work with mixed AOT compatible and incompatible features.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     public async Task MixedAOTScenario_ComplexWorkflow_WorksCorrectly()
     {
-        var scheduler = CurrentThreadScheduler.Instance;
+        var scheduler = Sequencer.CurrentThread;
 
         // AOT-compatible: Basic observable creation
-        var source = new BehaviorSubject<string>("start");
+        using var source = new StateSignal<string>("start");
 
         // AOT-incompatible but suppressed: ReactiveProperty creation
         var property = new ReactiveProperty<string>(InitialValue, scheduler, false, false);
@@ -149,16 +125,16 @@ public class ComprehensiveAOTMarkupTests
         // AOT-compatible: MessageBus usage
         var messageBus = new MessageBus();
         var messages = new List<string>();
-        messageBus.Listen<string>().Subscribe(messages.Add);
+        _ = messageBus.Listen<string>().Subscribe(messages.Add);
 
         // AOT-compatible: Interactions
         var interaction = new Interaction<string, bool>();
-        interaction.RegisterHandler(context => context.SetOutput(context.Input == "test"));
+        _ = interaction.RegisterHandler(static context => context.SetOutput(context.Input == "test"));
 
         // Test the workflow
         property.Value = UpdatedValue;
         messageBus.SendMessage("workflow test");
-        var result = interaction.Handle("test").Wait();
+        var result = await interaction.Handle("test");
 
         using (Assert.Multiple())
         {
@@ -168,20 +144,17 @@ public class ComprehensiveAOTMarkupTests
         }
 
         // Cleanup
-        source.Dispose();
         property.Dispose();
     }
 
-    /// <summary>
-    /// Tests that ObservableAsPropertyHelper works correctly in AOT scenarios.
-    /// </summary>
+    /// <summary>Tests that ObservableAsPropertyHelper works correctly in AOT scenarios.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     public async Task ObservableAsPropertyHelper_AOTCompatibleUsage_Works()
     {
         var obj = new TestReactiveObject();
-        var scheduler = CurrentThreadScheduler.Instance;
-        var source = new BehaviorSubject<string>("computed");
+        var scheduler = Sequencer.CurrentThread;
+        using var source = new StateSignal<string>("computed");
 
         // String-based property binding is AOT-compatible
         var helper = source
@@ -193,13 +166,10 @@ public class ComprehensiveAOTMarkupTests
         source.OnNext(UpdatedValue);
         await Assert.That(helper.Value).IsEqualTo(UpdatedValue);
 
-        source.Dispose();
         helper.Dispose();
     }
 
-    /// <summary>
-    /// Tests that dependency injection patterns work in AOT scenarios.
-    /// </summary>
+    /// <summary>Tests that dependency injection patterns work in AOT scenarios.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     public async Task DependencyInjection_AOTCompatiblePatterns_Work()
@@ -207,18 +177,18 @@ public class ComprehensiveAOTMarkupTests
         var resolver = Locator.CurrentMutable;
 
         // Register concrete implementations (AOT-friendly)
-        resolver.Register<IScheduler>(static () => CurrentThreadScheduler.Instance);
+        resolver.Register<ISequencer>(static () => Sequencer.CurrentThread);
         resolver.RegisterConstant("test service");
 
         // Create a simple factory
         resolver.Register<Func<string, ReactiveProperty<string>>>(static () => static value =>
         {
-            var scheduler = Locator.Current.GetService<IScheduler>();
+            var scheduler = Locator.Current.GetService<ISequencer>();
             return new(value, scheduler, false, false);
         });
 
         // Test resolution
-        var scheduler = Locator.Current.GetService<IScheduler>();
+        var scheduler = Locator.Current.GetService<ISequencer>();
         var constant = Locator.Current.GetService<string>();
         var factory = Locator.Current.GetService<Func<string, ReactiveProperty<string>>>();
 
@@ -235,9 +205,7 @@ public class ComprehensiveAOTMarkupTests
         property.Dispose();
     }
 
-    /// <summary>
-    /// Tests that activation/deactivation works correctly in AOT scenarios.
-    /// </summary>
+    /// <summary>Tests that activation/deactivation works correctly in AOT scenarios.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     public async Task ViewModelActivation_AOTCompatible_WorksCorrectly()
@@ -245,7 +213,7 @@ public class ComprehensiveAOTMarkupTests
         var viewModel = new TestActivatableViewModel();
         var activationCount = 0;
         var deactivationCount = 0;
-        var scheduler = CurrentThreadScheduler.Instance;
+        var scheduler = Sequencer.CurrentThread;
 
         viewModel.WhenActivated(disposables =>
         {
@@ -253,14 +221,14 @@ public class ComprehensiveAOTMarkupTests
 
             // Create reactive property within activation
             var property = new ReactiveProperty<string>("activated", scheduler, false, false);
-            property.DisposeWith(disposables);
+            _ = property.DisposeWith(disposables);
 
             // Setup cleanup
-            Disposable.Create(() => deactivationCount++).DisposeWith(disposables);
+            _ = new ActionDisposable(() => deactivationCount++).DisposeWith(disposables);
         });
 
         // Test activation cycle
-        viewModel.Activator.Activate();
+        _ = viewModel.Activator.Activate();
         using (Assert.Multiple())
         {
             await Assert.That(activationCount).IsEqualTo(1);
@@ -275,7 +243,7 @@ public class ComprehensiveAOTMarkupTests
         }
 
         // Test reactivation
-        viewModel.Activator.Activate();
+        _ = viewModel.Activator.Activate();
         using (Assert.Multiple())
         {
             await Assert.That(activationCount).IsEqualTo(ExpectedCount);
@@ -290,27 +258,24 @@ public class ComprehensiveAOTMarkupTests
         }
     }
 
-    /// <summary>
-    /// Tests error handling patterns in AOT scenarios.
-    /// </summary>
+    /// <summary>Tests error handling patterns in AOT scenarios.</summary>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     [Test]
     public async Task ErrorHandling_AOTScenarios_WorkCorrectly()
     {
-        var scheduler = CurrentThreadScheduler.Instance;
-        var property = new ReactiveProperty<string>("test", scheduler, false, false);
+        var property = new ReactiveProperty<string>("test", Sequencer.CurrentThread, false, false);
         var errors = new List<Exception>();
 
         // Subscribe to thrown exceptions (tests ReactiveObject error handling)
-        property.ThrownExceptions.Subscribe(errors.Add);
+        _ = property.ThrownExceptions.Subscribe(errors.Add);
 
         // Test validation errors
         var validationErrors = new List<string>();
-        property.ObserveErrorChanged
-            .Where(errs => errs != null)
+        _ = property.ObserveErrorChanged
+            .Where(static errs => errs is not null)
             .Subscribe(errs => validationErrors.AddRange(errs!.OfType<string>()));
 
-        _ = property.AddValidationError(x => string.IsNullOrEmpty(x) ? "Value required" : null);
+        _ = property.AddValidationError(static x => string.IsNullOrEmpty(x) ? "Value required" : null);
         property.Value = string.Empty;
 
         using (Assert.Multiple())

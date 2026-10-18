@@ -1,0 +1,51 @@
+<Project>
+  <PropertyGroup>
+    <IsTestProject Condition="'$(IsTestProject)' == '' and '$(MSBuildProjectName)' != 'ReactiveUI.Test.Utilities' and '$(MSBuildProjectName)' != 'ReactiveUI.TestGuiMocks'">true</IsTestProject>
+    <!-- Projects in this folder (tests) are not shipped libraries, so they have no public
+         API surface to track. This covers the two helper projects above that are not test
+         projects themselves. It has to precede the import: the root defaults the value and
+         derives $(EnablePublicApiBaseline) and the analyzer reference from it, so setting it
+         afterwards leaves tracking half on. -->
+    <TrackPublicApi>false</TrackPublicApi>
+  </PropertyGroup>
+
+  <!-- Inherit all repository-wide settings from the root src/Directory.Build.props. -->
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+
+  <!-- The test source is migrated off System.Reactive onto ReactiveUI.Primitives. Lean test projects bind
+       operators (ObserveOn/Where/Subscribe/...) and factories (Signal.*) to the Primitives surface; the
+       .Reactive test projects bind to the Primitives.Reactive (System.Reactive-backed) surface. The lean
+       seam already supplies ReactiveUI.Primitives.Concurrency/.Signals; here we add the bare
+       ReactiveUI.Primitives namespace (LinqExtensions operator overloads + SubscribeExtensions) for lean,
+       and ReactiveUI.Primitives.Reactive for the .Reactive leaves. -->
+  <ItemGroup Condition="'$(RxReactiveSeam)' != 'true'">
+    <Using Include="ReactiveUI.Internal" />
+  </ItemGroup>
+  <!-- The lean test projects are System.Reactive-free and use the Primitives surface. -->
+  <ItemGroup Condition="'$(RxReactiveSeam)' != 'true'">
+    <Using Include="ReactiveUI.Primitives" />
+    <!-- Concrete signal classes (ReturnSignal/StartSignal/ImmutableReturnRxVoidSignal) the tests construct
+         directly in place of the removed in-repo SingleValueObservable/SyncExecuteObservable sinks. -->
+    <Using Include="ReactiveUI.Primitives.Advanced" />
+  </ItemGroup>
+  <!-- BCL ObservableCollection replaces incidental DynamicData ObservableCollectionExtended in test mocks. -->
+  <ItemGroup>
+    <Using Include="System.Collections.ObjectModel" />
+    <!-- ReactiveUI.Primitives.Disposables is neutral (same package on both sides) and used pervasively across the
+         test tree (MultipleDisposable/Scope/EmptyDisposable/SwapDisposable/...). It is NOT a seam type, so it
+         belongs here as a normal namespace global using rather than in ReactiveShim.props. None of its names
+         collide with System.Reactive.Disposables, so it is safe for the .Reactive leaves too. -->
+    <Using Include="ReactiveUI.Primitives.Disposables" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(RxReactiveSeam)' == 'true'">
+    <Using Include="ReactiveUI.Primitives.Reactive" />
+    <Using Include="ReactiveUI.Primitives.Reactive.Advanced" />
+    <!-- The generic Signal<T> subject (and ReplaySignal/ScheduledSignal) is neutral — it ships in
+         ReactiveUI.Primitives.Core under ReactiveUI.Primitives.Signals and is shared by both leaves; the engine
+         seam (ReactiveShim.props) already imports that namespace. Only the NON-generic Signal static factory
+         differs per leaf: its Emit/None overloads take ISequencer (lean) vs IScheduler (reactive). In a reactive
+         test leaf, Sequencer.Immediate is System.Reactive's scheduler, so alias the bare Signal name to the
+         reactive factory. The alias is arity-0, so Signal<T> still resolves to the neutral Core type. -->
+    <Using Include="ReactiveUI.Primitives.Reactive.Signals.Signal" Alias="Signal" />
+  </ItemGroup>
+</Project>

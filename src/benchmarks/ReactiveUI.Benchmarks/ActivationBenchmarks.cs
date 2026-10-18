@@ -3,6 +3,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
 
+using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using BenchmarkDotNet.Attributes;
 
 namespace ReactiveUI.Benchmarks;
@@ -13,7 +15,8 @@ namespace ReactiveUI.Benchmarks;
 /// </summary>
 [MemoryDiagnoser]
 [MarkdownExporterAttribute.GitHub]
-public class ActivationBenchmarks
+[DebuggerDisplay("ActivationBenchmarks")]
+public class ActivationBenchmarks : IDisposable
 {
     /// <summary>The number of activate / deactivate cycles per benchmark invocation.</summary>
     private const int CycleCount = 10_000;
@@ -23,7 +26,19 @@ public class ActivationBenchmarks
 
     /// <summary>Creates the activatable view model and wires its <c>WhenActivated</c> block.</summary>
     [GlobalSetup]
-    public void Setup() => _viewModel = new ActivatableBenchmarkViewModel();
+    public void Setup() => _viewModel = new();
+
+    /// <summary>Disposes the activatable view model.</summary>
+    [GlobalCleanup]
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void Cleanup() => Dispose();
+
+    /// <summary>Disposes the activatable view model.</summary>
+    public void Dispose()
+    {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
 
     /// <summary>Measures repeated activate + deactivate cycles.</summary>
     [Benchmark]
@@ -33,5 +48,17 @@ public class ActivationBenchmarks
         {
             using var activation = _viewModel.Activator.Activate();
         }
+    }
+
+    /// <summary>Disposes resources owned by the benchmark.</summary>
+    /// <param name="disposing">Whether managed resources should be disposed.</param>
+    protected virtual void Dispose(bool disposing)
+    {
+        if (!disposing)
+        {
+            return;
+        }
+
+        _viewModel.Dispose();
     }
 }

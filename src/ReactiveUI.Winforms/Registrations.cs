@@ -3,14 +3,16 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
 
-using ReactiveUI.Helpers;
+using System.Diagnostics;
 using Splat;
 
+#if REACTIVE_SHIM
+namespace ReactiveUI.Reactive.Winforms;
+#else
 namespace ReactiveUI.Winforms;
+#endif
 
-/// <summary>
-/// .NET Framework platform registrations.
-/// </summary>
+/// <summary>.NET Framework platform registrations.</summary>
 /// <seealso cref="IWantsToRegisterStuff" />
 public class Registrations : IWantsToRegisterStuff
 {
@@ -20,9 +22,6 @@ public class Registrations : IWantsToRegisterStuff
         ArgumentExceptionHelper.ThrowIfNull(registrar);
 
         registrar.RegisterConstant<IPlatformOperations>(static () => new PlatformOperations());
-        registrar.RegisterConstant<ICreatesCommandBinding>(static () => new CreatesWinformsCommandBinding());
-        registrar.RegisterConstant<ICreatesObservableForProperty>(static () =>
-            new WinformsCreatesObservableForProperty());
         registrar.RegisterConstant<IActivationForViewFetcher>(static () => new ActivationForViewFetcher());
         registrar.RegisterConstant<ISetMethodBindingConverter>(static () => new PanelSetMethodBindingConverter());
         registrar.RegisterConstant<ISetMethodBindingConverter>(static () =>
@@ -31,7 +30,6 @@ public class Registrations : IWantsToRegisterStuff
         registrar.RegisterConstant<IBindingTypeConverter>(static () => new SingleToStringTypeConverter());
         registrar.RegisterConstant<IBindingTypeConverter>(static () => new DoubleToStringTypeConverter());
         registrar.RegisterConstant<IBindingTypeConverter>(static () => new DecimalToStringTypeConverter());
-        registrar.RegisterConstant<IBindingFallbackConverter>(static () => new ComponentModelFallbackConverter());
 
         if (ModeDetector.InUnitTestRunner())
         {

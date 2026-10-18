@@ -3,41 +3,20 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
 
-using System;
 using Splat;
 using TUnit.Core;
 
 namespace ReactiveUI.Splat.Tests;
 
-/// <summary>
-/// Assembly-level hooks for test initialization and cleanup.
-/// </summary>
+/// <summary>Assembly-level hooks for test initialization and cleanup.</summary>
 public static class AssemblyHooks
 {
-    /// <summary>
-    /// Called before any tests in this assembly start.
-    /// </summary>
+    /// <summary>Called before any tests in this assembly start.</summary>
+    /// <remarks>Overrides <see cref="ModeDetector"/> so the framework detects a unit test runner.</remarks>
     [Before(Assembly)]
-    public static void AssemblySetup() =>
+    public static void AssemblySetup() => ModeDetector.OverrideModeDetector(new TestModeDetector());
 
-        // Override ModeDetector to ensure we're detected as being in a unit test runner
-        ModeDetector.OverrideModeDetector(new TestModeDetector());
-
-    /// <summary>
-    /// Called after all tests in this assembly complete.
-    /// </summary>
-    [After(Assembly)]
-    public static void AssemblyTeardown()
-    {
-        // Clean up resources
-        GC.Collect();
-        GC.WaitForPendingFinalizers();
-        GC.Collect();
-    }
-
-    /// <summary>
-    /// Mode detector that always indicates we're in a unit test runner.
-    /// </summary>
+    /// <summary>Mode detector that always indicates we're in a unit test runner.</summary>
     private sealed class TestModeDetector : IModeDetector
     {
         /// <inheritdoc/>

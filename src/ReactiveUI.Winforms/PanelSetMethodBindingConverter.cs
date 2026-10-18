@@ -3,13 +3,15 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for full license information.
 
-using ReactiveUI.Helpers;
+using System.Diagnostics;
 
+#if REACTIVE_SHIM
+namespace ReactiveUI.Reactive.Winforms;
+#else
 namespace ReactiveUI.Winforms;
+#endif
 
-/// <summary>
-/// A converter that can handle setting values on a <see cref="Panel"/> control for binding.
-/// </summary>
+/// <summary>A converter that can handle setting values on a <see cref="Panel"/> control for binding.</summary>
 public class PanelSetMethodBindingConverter : ISetMethodBindingConverter
 {
     /// <summary>The affinity returned when the source can be bound to a control collection.</summary>
@@ -24,8 +26,8 @@ public class PanelSetMethodBindingConverter : ISetMethodBindingConverter
         }
 
         var implementsControlEnumerable = Array.Exists(fromType.GetInterfaces(), static x =>
-            x.IsGenericType && x.GetGenericTypeDefinition() == typeof(IEnumerable<>) &&
-            x.GetGenericArguments()[0].IsSubclassOf(typeof(Control)));
+            x.IsGenericType && x.GetGenericTypeDefinition() == typeof(IEnumerable<>)
+            && x.GetGenericArguments()[0].IsSubclassOf(typeof(Control)));
 
         return implementsControlEnumerable ? ControlCollectionAffinity : 0;
     }

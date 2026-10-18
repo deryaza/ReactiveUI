@@ -6,31 +6,26 @@
 using System.Runtime.Versioning;
 using Android.Runtime;
 
+#if REACTIVE_SHIM
+namespace ReactiveUI.Reactive;
+#else
 namespace ReactiveUI;
-
-/// <summary>
-/// This is a Fragment that is both an Activity and has ReactiveObject powers
-/// (i.e. you can call RaiseAndSetIfChanged).
-/// </summary>
+#endif
+/// <summary>This is a Fragment that is both an Activity and has ReactiveObject powers (i.e. you can call RaiseAndSetIfChanged).</summary>
 /// <typeparam name="TViewModel">The view model type.</typeparam>
+[System.Diagnostics.DebuggerDisplay("{ViewModel}")]
 public class ReactiveFragment<TViewModel> : ReactiveFragment, IViewFor<TViewModel>, ICanActivate
     where TViewModel : class
 {
-    /// <summary>
-    /// The backing field for the view model.
-    /// </summary>
+    /// <summary>The backing field for the view model.</summary>
     private TViewModel? _viewModel;
 
-    /// <summary>
-    /// Initializes a new instance of the <see cref="ReactiveFragment{TViewModel}"/> class.
-    /// </summary>
+    /// <summary>Initializes a new instance of the <see cref="ReactiveFragment{TViewModel}"/> class.</summary>
     protected ReactiveFragment()
     {
     }
 
-    /// <summary>
-    /// Initializes a new instance of the <see cref="ReactiveFragment{TViewModel}"/> class.
-    /// </summary>
+    /// <summary>Initializes a new instance of the <see cref="ReactiveFragment{TViewModel}"/> class.</summary>
     /// <param name="handle">The handle.</param>
     /// <param name="ownership">The ownership.</param>
     [ObsoletedOSPlatform("android28.0")]
@@ -49,7 +44,7 @@ public class ReactiveFragment<TViewModel> : ReactiveFragment, IViewFor<TViewMode
     /// <inheritdoc/>
     object? IViewFor.ViewModel
     {
-        get => _viewModel;
-        set => _viewModel = (TViewModel?)value!;
+        get => (object?)_viewModel;
+        set => ViewModel = (TViewModel?)value;
     }
 }
