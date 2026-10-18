@@ -36,7 +36,7 @@
 
   <ItemGroup>
     <PackageReference Include="ReactiveUI.Primitives.Reactive" ExcludeAssets="analyzers" />
-    <PackageReference Include="Splat" />
+    <ProjectReference Include="..\..\..\splat\src\Splat\Splat.csproj" />
     <!-- The binding engine's generator, analyzer and build props ship in its package and have to reach every
          ReactiveUI consumer, so none of its assets stay private. -->
     <PackageReference Include="ReactiveUI.Binding.Reactive" PrivateAssets="none" />

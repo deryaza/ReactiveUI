@@ -33,7 +33,7 @@
 
   <ItemGroup>
     <PackageReference Include="ReactiveUI.Primitives" ExcludeAssets="analyzers" />
-    <PackageReference Include="Splat" />
+    <ProjectReference Include="..\..\..\splat\src\Splat\Splat.csproj" />
     <!-- The [Reactive], [ReactiveCommand] and related generators ship in this package. ReactiveUI and
          ReactiveUI.Reactive both build on this assembly, so none of its assets stay private and the generators
          reach every consumer of either flavour. The generators pick the flavour from what the consumer references. -->
