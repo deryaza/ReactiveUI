@@ -119,7 +119,7 @@
     <ReactiveUIPortableWindowsTargetFrameworks>$(ReactiveUIPortableTargetFrameworks);$(ReactiveUIWindowsTargets)</ReactiveUIPortableWindowsTargetFrameworks>
 
     <!-- Libraries with Android and Apple platform code. Apple targets build on macOS and Windows only. -->
-    <ReactiveUIPlatformTargetFrameworks>$(ReactiveUIPortableTargetFrameworks);$(ReactiveUIAndroidTargets)</ReactiveUIPlatformTargetFrameworks>
+    <ReactiveUIPlatformTargetFrameworks>$(ReactiveUIPortableTargetFrameworks);</ReactiveUIPlatformTargetFrameworks>
     <ReactiveUIPlatformTargetFrameworks Condition="$([MSBuild]::IsOsPlatform('Windows')) or $([MSBuild]::IsOsPlatform('OSX'))">$(ReactiveUIPlatformTargetFrameworks);$(ReactiveUIAppleTargets)</ReactiveUIPlatformTargetFrameworks>
 
     <!-- Final target frameworks for tests/benchmarks (modern .NET only, with platform-specific additions) -->
